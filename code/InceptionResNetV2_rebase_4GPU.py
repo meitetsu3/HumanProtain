@@ -26,6 +26,7 @@ VAL_BATCH_SIZE=50
 EPOCHS = 5
 NUM_GPUS = 4
 
+MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
@@ -90,29 +91,19 @@ model.compile(
 
 strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 config = tf.estimator.RunConfig(train_distribute=strategy)
-estimator = tf.keras.estimator.model_to_estimator(model,config=config)
+estimator = tf.keras.estimator.model_to_estimator(model,config=config,model_dir=MODEL_DIR)
 
 ###############################################################################
 # data input pipeline
 ###############################################################################
 
 def augment(image):
-    augment_img = iaa.Sequential([
-        iaa.OneOf([
-            iaa.Affine(rotate=0),
-            iaa.Affine(rotate=90),
-            iaa.Affine(rotate=180),
-            iaa.Affine(rotate=270),
-            iaa.Affine(rotate=45),
-            iaa.Affine(rotate=135),
-            iaa.Affine(rotate=225),
-            iaa.Affine(rotate=315),
-            iaa.Fliplr(0.5),
-            iaa.Flipud(0.5),
-        ])], random_order=True)
-    
-    image_aug = augment_img.augment_image(image)
-    return image_aug
+    image = tf.image.random_flip_left_right(image)
+    image = tf.image.random_flip_up_down(image)
+    nk = tf.random_uniform((1), minval=0, maxval=3, dtype=tf.uint8)
+    image = tf.image.rot90(image, k = nk)
+
+    return image
 
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
@@ -128,7 +119,7 @@ def parse_fn(example):
   image = tf.reshape(image,[parsed["height"],parsed["width"],4])
   image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
   image = tf.image.resize_images(image, (INPUT_SHAPE[0], INPUT_SHAPE[1]))
-  #image = augment(image)
+  image = augment(image)
   image = tf.div(image, 255)
   labels = tf.decode_raw(parsed["label"], tf.float64)
   return image, labels
@@ -138,6 +129,7 @@ def input_fn():
   dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
   dataset = dataset.shuffle(buffer_size=100)
   dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
+  #dataset = dataset.cache()
   dataset = dataset.batch(batch_size=16)
   dataset = dataset.prefetch(buffer_size = None)
   return dataset
