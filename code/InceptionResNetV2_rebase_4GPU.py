@@ -98,7 +98,17 @@ strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 config = tf.estimator.RunConfig(train_distribute=strategy, model_dir=get_model_folder())
 estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
-tf.contrib.estimator.add_metrics(estimator, tf.contrib.metrics.f1_score)
+###############################################################################
+# metrics
+###############################################################################
+
+def f1(labels, predictions):
+    pred_values = predictions['predictions']
+    f1 = tf.contrib.metrics.f1_score(labels,pred_values)
+    return {'f1':f1}
+
+tf.contrib.estimator.add_metrics(estimator, f1)
+
 ###############################################################################
 # data input pipeline
 ###############################################################################
