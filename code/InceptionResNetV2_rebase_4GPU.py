@@ -23,6 +23,7 @@ BATCH_SIZE = 10
 VAL_BATCH_SIZE=50
 EPOCHS = 5
 NUM_GPUS = 4
+lr = 1e-05
 
 MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
@@ -86,7 +87,7 @@ model.summary()
 
 model.compile(
     loss='categorical_crossentropy', 
-    optimizer=tf.train.AdamOptimizer(1e-05),
+    optimizer=tf.train.AdamOptimizer(lr),
     metrics=['acc', f1])
 
 ###############################################################################
@@ -94,9 +95,10 @@ model.compile(
 ###############################################################################
 
 strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
-config = tf.estimator.RunConfig(train_distribute=strategy)
-estimator = tf.keras.estimator.model_to_estimator(model,config=config,model_dir=get_model_folder())
+config = tf.estimator.RunConfig(train_distribute=strategy, model_dir=get_model_folder())
+estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
+tf.contrib.estimator.add_metrics(estimator, tf.contrib.metrics.f1_score)
 ###############################################################################
 # data input pipeline
 ###############################################################################
@@ -129,9 +131,9 @@ def parse_fn(example):
 
 def input_fn(input_files,batch_size=16, repeat_count=2):
   files = tf.data.Dataset.list_files(input_files)
-  dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
+  dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count()-1)
   dataset = dataset.shuffle(buffer_size=100)
-  dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
+  dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count()-1)
   #dataset = dataset.cache()
   dataset = dataset.repeat(repeat_count)
   dataset = dataset.batch(batch_size=batch_size)
