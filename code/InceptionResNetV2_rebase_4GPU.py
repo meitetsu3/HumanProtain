@@ -5,9 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os, time
 import numpy as np
-import skimage.io
-import cv2
-from imgaug import augmenters as iaa
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 
 from tensorflow.python.keras import backend as K
@@ -30,12 +28,18 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
+exptitle = 'exp'
 
 ###############################################################################
-# 
+#  Util
 ###############################################################################
 
-
+def get_model_folder():
+    folder_name = "/{0}_{1}".format(datetime.now().strftime("%Y%m%d%H%M"),exptitle)
+    tensorboard_path = MODEL_DIR + folder_name
+    if not os.path.exists(tensorboard_path):
+        os.makedirs(tensorboard_path)
+    return tensorboard_path
 
 ###############################################################################
 # model
@@ -91,7 +95,7 @@ model.compile(
 
 strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 config = tf.estimator.RunConfig(train_distribute=strategy)
-estimator = tf.keras.estimator.model_to_estimator(model,config=config,model_dir=MODEL_DIR)
+estimator = tf.keras.estimator.model_to_estimator(model,config=config,model_dir=get_model_folder())
 
 ###############################################################################
 # data input pipeline
@@ -100,9 +104,8 @@ estimator = tf.keras.estimator.model_to_estimator(model,config=config,model_dir=
 def augment(image):
     image = tf.image.random_flip_left_right(image)
     image = tf.image.random_flip_up_down(image)
-    nk = tf.random_uniform((1), minval=0, maxval=3, dtype=tf.uint8)
+    nk = tf.random_uniform([], minval=0, maxval=3, dtype=tf.int32)
     image = tf.image.rot90(image, k = nk)
-
     return image
 
 def parse_fn(example):
@@ -124,51 +127,23 @@ def parse_fn(example):
   labels = tf.decode_raw(parsed["label"], tf.float64)
   return image, labels
 
-def input_fn():
-  files = tf.data.Dataset.list_files("../input_tf/Train-*.tfrecords")
+def input_fn(input_files,batch_size=16, repeat_count=2):
+  files = tf.data.Dataset.list_files(input_files)
   dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
   dataset = dataset.shuffle(buffer_size=100)
   dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
   #dataset = dataset.cache()
-  dataset = dataset.batch(batch_size=16)
+  dataset = dataset.repeat(repeat_count)
+  dataset = dataset.batch(batch_size=batch_size)
   dataset = dataset.prefetch(buffer_size = None)
   return dataset
 
-class TimeHistory(tf.train.SessionRunHook):
-    def begin(self):
-        self.times = []
-    def before_run(self, run_context):
-        self.iter_time_start = time.time()
-    def after_run(self, run_context, run_values):
-        self.times.append(time.time() - self.iter_time_start)
-
-time_hist = TimeHistory()
-
-checkpointer = ModelCheckpoint(
-    '../working/InceptionResNetV2_base.model', 
-    verbose=2, 
-    save_best_only=True)
-
-epochs = 5; 
+epochs = 3
+INPUT_FILES = "../input_tf/Train-*.tfrecords"
 
 # train model
-history = estimator.train(input_fn=lambda:input_fn())
+history = estimator.train(input_fn=lambda:input_fn(input_files = INPUT_FILES
+                                                   ,batch_size=16
+                                                   ,repeat_count=epochs))
 
 
-#model = load_model(
-#    '/kaggle/working/InceptionResNetV2_base.model', 
-#    custom_objects={'f1': f1})
-
-submit = pd.read_csv('../input/sample_submission.csv')
-
-predicted = []
-for name in tqdm(submit['Id']):
-    path = os.path.join('../input/test/', name)
-    image = data_generator.load_image(path, INPUT_SHAPE)
-    score_predict = model.predict(image[np.newaxis])[0]
-    label_predict = np.arange(28)[score_predict>=0.2]
-    str_predict_label = ' '.join(str(l) for l in label_predict)
-    predicted.append(str_predict_label)
-
-submit['Predicted'] = predicted
-submit.to_csv('submission_InceptionResNetV2_base_1bnlr5_ep350_.csv', index=False)
