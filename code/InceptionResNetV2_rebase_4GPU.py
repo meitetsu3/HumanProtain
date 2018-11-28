@@ -1,5 +1,4 @@
 
-
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,16 +14,17 @@ from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionRe
 from tensorflow.python.keras.optimizers import Adam
 from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.callbacks import ModelCheckpoint
+from tensorflow.python.client import device_lib
 
-
+NUM_GPUS = len(device_lib.list_local_devices())-1
 ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (299,299,3)
 BATCH_SIZE = 10
 VAL_BATCH_SIZE=50
-EPOCHS = 5
-NUM_GPUS = 4
+EPOCHS = 2
 lr = 1e-05
 
+INPUT_FILES = "../input_tf/Train-*.tfrecords"
 MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
@@ -94,8 +94,13 @@ model.compile(
 # estimator
 ###############################################################################
 
-strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
+if NUM_GPUS == 1:
+    strategy = tf.contrib.distribute.OneDeviceStrategy('/gpu:0')
+elif NUM_GPUS > 1:
+    strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
+
 config = tf.estimator.RunConfig(train_distribute=strategy, model_dir=get_model_folder())
+
 estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
 ###############################################################################
@@ -103,11 +108,13 @@ estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 ###############################################################################
 
 def f1(labels, predictions):
-    pred_values = predictions['predictions']
-    f1 = tf.contrib.metrics.f1_score(labels,pred_values)
-    return {'f1':f1}
+    return {'f1':tf.constant(1)}
 
-tf.contrib.estimator.add_metrics(estimator, f1)
+def my_rmse(labels, predictions):
+    pred_values = predictions['predictions']
+    return {'rmse': tf.metrics.root_mean_squared_error(labels, pred_values)}
+
+tf.contrib.estimator.add_metrics(estimator, my_rmse)
 
 ###############################################################################
 # data input pipeline
@@ -141,21 +148,18 @@ def parse_fn(example):
 
 def input_fn(input_files,batch_size=16, repeat_count=2):
   files = tf.data.Dataset.list_files(input_files)
-  dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count()-1)
+  dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
   dataset = dataset.shuffle(buffer_size=100)
-  dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count()-1)
+  dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
   #dataset = dataset.cache()
   dataset = dataset.repeat(repeat_count)
   dataset = dataset.batch(batch_size=batch_size)
   dataset = dataset.prefetch(buffer_size = None)
   return dataset
 
-epochs = 3
-INPUT_FILES = "../input_tf/Train-*.tfrecords"
-
 # train model
 history = estimator.train(input_fn=lambda:input_fn(input_files = INPUT_FILES
-                                                   ,batch_size=16
-                                                   ,repeat_count=epochs))
+                                                   ,batch_size=BATCH_SIZE
+                                                   ,repeat_count=EPOCHS))
 
 
