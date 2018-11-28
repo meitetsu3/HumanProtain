@@ -16,15 +16,20 @@ from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.callbacks import ModelCheckpoint
 from tensorflow.python.client import device_lib
 
-NUM_GPUS = len(device_lib.list_local_devices())-1
+def get_available_gpus():
+    local_device_protos = device_lib.list_local_devices()
+    return [x.name for x in local_device_protos if x.device_type == 'GPU']
+
+NUM_GPUS = len(get_available_gpus())
 ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (299,299,3)
 BATCH_SIZE = 10
 VAL_BATCH_SIZE=50
-EPOCHS = 2
+TRAIN_STEPS = 3100*1
 lr = 1e-05
 
-INPUT_FILES = "../input_tf/Train-*.tfrecords"
+TRAIN_FILES = "../input_tf/Train-*.tfrecords"
+VAL_FILES = "../input_tf/Train-*.tfrecords"
 MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
@@ -91,7 +96,7 @@ model.compile(
     metrics=['acc', f1])
 
 ###############################################################################
-# estimator
+# strategy, config and estimator
 ###############################################################################
 
 if NUM_GPUS == 1:
@@ -108,13 +113,13 @@ estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 ###############################################################################
 
 def f1(labels, predictions):
-    return {'f1':tf.constant(1)}
+    return {"f1":tf.constant(1)}
 
 def my_rmse(labels, predictions):
     pred_values = predictions['predictions']
-    return {'rmse': tf.metrics.root_mean_squared_error(labels, pred_values)}
+    return {"rmse": tf.metrics.root_mean_squared_error(labels, pred_values)}
 
-tf.contrib.estimator.add_metrics(estimator, my_rmse)
+estimator = tf.contrib.estimator.add_metrics(estimator, my_rmse)
 
 ###############################################################################
 # data input pipeline
@@ -126,6 +131,7 @@ def augment(image):
     nk = tf.random_uniform([], minval=0, maxval=3, dtype=tf.int32)
     image = tf.image.rot90(image, k = nk)
     return image
+
 
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
@@ -146,20 +152,51 @@ def parse_fn(example):
   labels = tf.decode_raw(parsed["label"], tf.float64)
   return image, labels
 
-def input_fn(input_files,batch_size=16, repeat_count=2):
-  files = tf.data.Dataset.list_files(input_files)
-  dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
-  dataset = dataset.shuffle(buffer_size=100)
-  dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
-  #dataset = dataset.cache()
-  dataset = dataset.repeat(repeat_count)
-  dataset = dataset.batch(batch_size=batch_size)
-  dataset = dataset.prefetch(buffer_size = None)
-  return dataset
+def input_fn(input_files,mode,batch_size=16,repeat_count=1):
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        repeat_count = None
+    shuffle_buffer_size = 10*batch_size
+    files = tf.data.Dataset.list_files(input_files)
+    dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
+    dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+    dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
+      #dataset = dataset.cache()
+    dataset = dataset.repeat(repeat_count)
+    dataset = dataset.batch(batch_size=batch_size)
+    dataset = dataset.prefetch(buffer_size = None)
+    return dataset
 
-# train model
-history = estimator.train(input_fn=lambda:input_fn(input_files = INPUT_FILES
+
+###############################################################################
+# train and evaluate
+###############################################################################
+
+KEY_COLUMN = 'key'
+def serving_input_fn():
+    feature_placeholders = {
+        'image': tf.placeholder(tf.float64, [None]),
+        KEY_COLUMN: tf.placeholder_with_default(tf.constant(['nokey']), [None])
+    }
+    features = {
+        key: tf.expand_dims(tensor, -1)
+        for key, tensor in feature_placeholders.items()
+    }
+    return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
+
+exporter = tf.estimator.LatestExporter('exporter', serving_input_fn, exports_to_keep=None)
+
+train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
                                                    ,batch_size=BATCH_SIZE
-                                                   ,repeat_count=EPOCHS))
+                                                   ,mode = tf.estimator.ModeKeys.TRAIN)
+    ,max_steps = TRAIN_STEPS)
+
+eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FILES
+                                                   ,batch_size=VAL_BATCH_SIZE)
+    ,steps = 10
+    ,exporters = exporter)
+
+tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+
 
 
