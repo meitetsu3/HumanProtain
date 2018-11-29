@@ -176,7 +176,7 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
 
 def serving_input_fn():
     feature_placeholders = {
-        'image_input': tf.placeholder(tf.float64, [None]),
+        'image_input': tf.placeholder(tf.float64, [None,INPUT_SHAPE[0],INPUT_SHAPE[1],INPUT_SHAPE[2]]),
     }
     features = {
         key: tf.expand_dims(tensor, -1)
