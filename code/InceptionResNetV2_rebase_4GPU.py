@@ -179,7 +179,7 @@ def serving_input_fn():
         'image_input': tf.placeholder(tf.float64, [None,INPUT_SHAPE[0],INPUT_SHAPE[1],INPUT_SHAPE[2]]),
     }
     features = {
-        key: tf.expand_dims(tensor, -1)
+        key: tensor
         for key, tensor in feature_placeholders.items()
     }
     return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
