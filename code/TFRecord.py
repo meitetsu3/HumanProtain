@@ -44,8 +44,8 @@ def load_image(path):
 def CreateTensorflowReadFile(dataset_info, out_file):
     with tf.python_io.TFRecordWriter( out_file ) as writer:
         for r in dataset_info:
-            labels = np.zeros((28))
-            imagearray = load_image(r['path'])   
+            labels = np.zeros((28),dtype=np.uint8)
+            imagearray = load_image(r['path'])    #uint8
             height = imagearray.shape[0]
             width = imagearray.shape[1]
             channel = imagearray.shape[2]

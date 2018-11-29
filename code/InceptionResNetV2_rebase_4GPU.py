@@ -58,7 +58,7 @@ def create_model(input_shape, n_out):
     weights='imagenet', 
     input_shape=input_shape)    
     
-    input_tensor = Input(shape=input_shape)
+    input_tensor = Input(shape=input_shape, name = 'image_input')
     bn = BatchNormalization()(input_tensor)
     x = pretrain_model(bn)
     #bn = BatchNormalization()(x)
@@ -66,7 +66,7 @@ def create_model(input_shape, n_out):
     x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
     x = Dropout(0.5)(x)
-    output = Dense(n_out, activation='sigmoid')(x)
+    output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
     model = Model(input_tensor, output)
     return model
 
@@ -148,8 +148,10 @@ def parse_fn(example):
   image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
   image = tf.image.resize_images(image, (INPUT_SHAPE[0], INPUT_SHAPE[1]))
   image = augment(image)
-  image = tf.div(image, 255)
-  labels = tf.decode_raw(parsed["label"], tf.float64)
+  image = tf.div(tf.cast(image,tf.float32), 255.0)
+  
+  labels = tf.decode_raw(parsed["label"], tf.uint8)
+  labels = tf.cast(labels, tf.float32)
   return image, labels
 
 def input_fn(input_files,mode,batch_size=16,repeat_count=1):
@@ -171,11 +173,10 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
 # train and evaluate
 ###############################################################################
 
-KEY_COLUMN = 'key'
+
 def serving_input_fn():
     feature_placeholders = {
-        'image': tf.placeholder(tf.float64, [None]),
-        KEY_COLUMN: tf.placeholder_with_default(tf.constant(['nokey']), [None])
+        'image_input': tf.placeholder(tf.float64, [None]),
     }
     features = {
         key: tf.expand_dims(tensor, -1)
@@ -188,12 +189,13 @@ exporter = tf.estimator.LatestExporter('exporter', serving_input_fn, exports_to_
 train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
                                                    ,batch_size=BATCH_SIZE
                                                    ,mode = tf.estimator.ModeKeys.TRAIN)
-    ,max_steps = TRAIN_STEPS)
+                                                    ,max_steps = TRAIN_STEPS)
 
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FILES
-                                                   ,batch_size=VAL_BATCH_SIZE)
-    ,steps = 10
-    ,exporters = exporter)
+                                                   ,batch_size=VAL_BATCH_SIZE
+                                                   ,mode = tf.estimator.ModeKeys.EVAL)
+                                                    ,steps = 10
+                                                    ,exporters = exporter)
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
