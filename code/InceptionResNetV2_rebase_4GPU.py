@@ -23,13 +23,15 @@ def get_available_gpus():
 NUM_GPUS = len(get_available_gpus())
 ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (299,299,3)
-BATCH_SIZE = 10
+CHECK_POINT_STEPS = 1000
+BATCH_SIZE = 16 # 16 for gtx 1070 laptop, for gtx 1080 ti
 VAL_BATCH_SIZE=50
-TRAIN_STEPS = 3100*1
+TRAIN_STEPS = 3100*2
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
-VAL_FILES = "../input_tf/Train-*.tfrecords"
+VAL_FILES = "../input_tf/Val-*.tfrecords"
+TEST_FILES = "../input_tf/Test-*.tfrecords"
 MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
@@ -104,7 +106,9 @@ if NUM_GPUS == 1:
 elif NUM_GPUS > 1:
     strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 
-config = tf.estimator.RunConfig(train_distribute=strategy, model_dir=get_model_folder())
+config = tf.estimator.RunConfig(train_distribute=strategy
+                                ,save_checkpoints_steps = CHECK_POINT_STEPS
+                                , model_dir=get_model_folder())
 
 estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
@@ -112,14 +116,12 @@ estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 # metrics
 ###############################################################################
 
-def f1(labels, predictions):
-    return {"f1":tf.constant(1)}
 
-def my_rmse(labels, predictions):
-    pred_values = predictions['predictions']
-    return {"rmse": tf.metrics.root_mean_squared_error(labels, pred_values)}
-
-estimator = tf.contrib.estimator.add_metrics(estimator, my_rmse)
+#def my_rmse(labels, predictions):
+#    pred_values = predictions['predictions']
+#    return {"rmse": tf.metrics.root_mean_squared_error(labels, pred_values)}
+#
+#estimator = tf.contrib.estimator.add_metrics(estimator, my_rmse)
 
 ###############################################################################
 # data input pipeline
@@ -184,7 +186,7 @@ def serving_input_fn():
     }
     return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
 
-exporter = tf.estimator.LatestExporter('exporter', serving_input_fn, exports_to_keep=None)
+exporter = tf.estimator.BestExporter('best_exporter', serving_input_fn, exports_to_keep=5)
 
 train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
                                                    ,batch_size=BATCH_SIZE
@@ -194,11 +196,8 @@ train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FILES
                                                    ,batch_size=VAL_BATCH_SIZE
                                                    ,mode = tf.estimator.ModeKeys.EVAL)
-                                                    ,steps = 10
+                                                    ,steps = 100
+                                                    ,start_delay_secs = 0
                                                     ,exporters = exporter)
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-
-
-
-

@@ -12,19 +12,31 @@ import skimage.io
 path_to_train = '../input/train/'
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
+testdata = pd.read_csv('../input/test.csv')
 
 ####################Image###########################################################
 # importing file base name and lables -> path, labels dict object 
 # train_dataset_info
 ###############################################################################
-train_dataset_info = []
 
-for name, labels in zip(traindata['Id'], traindata['Target'].str.split(' ')):
-    train_dataset_info.append({
-        'path':os.path.join(path_to_train, name),
-        'labels':np.array([int(label) for label in labels])})
+def createTFRecord(file_path, img_folder_path, Test = False):
+    path_label_list= []
+    if Test:
+        for name in file_path['Id']:
+            path_label_list.append({
+                'path':os.path.join(img_folder_path, name),
+                'labels':np.array([0])}) # test labels is dummy. not used.
+    else:
+        for name, labels in zip(file_path['Id'], file_path['Target'].str.split(' ')):
+            path_label_list.append({
+                'path':os.path.join(img_folder_path, name),
+                'labels':np.array([int(label) for label in labels])})
+            
+    return np.array(path_label_list)
 
-train_dataset_info = np.array(train_dataset_info)
+train_dataset_info = createTFRecord(traindata, path_to_train)
+
+test_dataset_info = createTFRecord(testdata, path_to_test, Test=True)
 
 ###############################################################################
 # saving 4 channel array image as bytes
@@ -67,6 +79,10 @@ bs = 2590 #total 31072, 2590*12 = 31080
 
 for b in range(12):
     CreateTensorflowReadFile(train_dataset_info[b*bs:(b+1)*bs] , "../input_tf/Train-"+str(b)+".tfrecords")
+# change the name to Val if you want to use it for validation
+    
+CreateTensorflowReadFile(test_dataset_info , "../input_tf/Test-.tfrecords")
+
 
 # original about 18GB
 # x 4 channel 32.6 GB

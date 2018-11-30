@@ -14,11 +14,7 @@ conda create -n protein python=3.6 anaconda
 
 ```
 activate protein
-```
-
-or for unix
-
-```
+# or for unix
 source activate protein
 ```
 
@@ -62,7 +58,11 @@ image here:
 
 ## First training
 
+
+
 ## Reviewing the model performance
+
+
 
 ## Predicting
 
