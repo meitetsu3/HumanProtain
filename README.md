@@ -46,9 +46,11 @@ go to code folder which is assumed working directory. Open TFRecord.py with your
 
 In this project, we are converting the image files to TFRecord files.
 
-create input_tf folder, and run the TFRecord.py.
+create input_tf folder under the working directory.
+Copy sample_submission.csv under the input folder, and name it test.csv.
+The run the TFRecord.py.
 
-You will get 12 .tfrecord files containing more than 31k training images(each stacked array of 4 gray scale images with different filters) and lables (multi-lables).
+You will get 12 Train-?.tfrecord files containing more than 31k training images(each stacked array of 4 gray scale images with different filters) and lables (multi-lables). It also creates Test-.tfrecord file which contains all the test images.
 
 Based on your system  and preference, change the number of files you create.
 

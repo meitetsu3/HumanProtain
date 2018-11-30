@@ -24,7 +24,7 @@ NUM_GPUS = len(get_available_gpus())
 ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
-BATCH_SIZE = 16 # 16 for gtx 1070 laptop, for gtx 1080 ti
+BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=50
 TRAIN_STEPS = 3100*2
 lr = 1e-05
@@ -37,6 +37,7 @@ TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
 exptitle = 'exp'
+
 
 ###############################################################################
 #  Util
