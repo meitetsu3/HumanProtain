@@ -26,7 +26,7 @@ INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=50
-TRAIN_STEPS = 3100*2
+TRAIN_STEPS = 1000*30
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
@@ -36,7 +36,7 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'exp'
+exptitle = 'one_val_not_used_in_train'
 
 
 ###############################################################################
@@ -202,3 +202,7 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                     ,exporters = exporter)
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+
+
+
