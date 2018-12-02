@@ -1,19 +1,12 @@
 
 import tensorflow as tf
 import pandas as pd
-import matplotlib.pyplot as plt
-import os, time
-import numpy as np
+import os
 from datetime import datetime
-from sklearn.model_selection import train_test_split
-
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Activation, Dropout, Flatten, Dense,BatchNormalization,Input
-from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2, preprocess_input
-from tensorflow.python.keras.optimizers import Adam
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.keras.callbacks import ModelCheckpoint
+from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormalization,Input
+from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
 from tensorflow.python.client import device_lib
 
 def get_available_gpus():
@@ -26,7 +19,7 @@ INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=50
-TRAIN_STEPS = 1000*30
+TRAIN_STEPS = 1000*10
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
@@ -36,7 +29,7 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'one_val_not_used_in_train'
+exptitle = 'Y_to_RG'
 
 
 ###############################################################################
@@ -148,11 +141,18 @@ def parse_fn(example):
   parsed = tf.parse_single_example(example, example_fmt)
   image = tf.decode_raw(parsed["image"], tf.uint8)
   image = tf.reshape(image,[parsed["height"],parsed["width"],4])
+  image = tf.div(tf.cast(image,tf.float32), 255.0)
+  
+  image = tf.stack([
+          tf.reshape(image[:,:,0],[parsed["height"],parsed["width"]])+tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])/2
+         ,tf.reshape(image[:,:,1],[parsed["height"],parsed["width"]])+tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])/2
+         ,tf.reshape(image[:,:,2],[parsed["height"],parsed["width"]])]
+         ,axis=2)
+
   image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
   image = tf.image.resize_images(image, (INPUT_SHAPE[0], INPUT_SHAPE[1]))
   image = augment(image)
-  image = tf.div(tf.cast(image,tf.float32), 255.0)
-  
+
   labels = tf.decode_raw(parsed["label"], tf.uint8)
   labels = tf.cast(labels, tf.float32)
   return image, labels
@@ -165,7 +165,7 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
     dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
     dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
     dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
-      #dataset = dataset.cache()
+    #dataset = dataset.cache()
     dataset = dataset.repeat(repeat_count)
     dataset = dataset.batch(batch_size=batch_size)
     dataset = dataset.prefetch(buffer_size = None)

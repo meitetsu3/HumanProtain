@@ -29,11 +29,12 @@ def showimg(file_it):
 
     labels = np.frombuffer(labels, dtype=np.uint8)
     print(labels)
+    print(image[:,:,0:3].shape)
     RGB = Image.fromarray(image[:,:,0:3])
     RGB.show()
-    RGY = Image.fromarray(image[:,:,[0,1,3]])
-    RGY.show()
+    #RGY = Image.fromarray(image[:,:,[0,1,3]])
+    #RGY.show()
 
 showimg(trainf)
 
-showimg(testf)
+#showimg(testf)

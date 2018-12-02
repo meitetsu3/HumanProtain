@@ -14,7 +14,7 @@ import pandas as pd
 INPUT_SHAPE = (299,299,3)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201811300758_one_val_not_used_in_train/export/best_exporter/1543596371'
+export_dir = './model/201812011724_Y_to_RG/export/best_exporter/1543716747'
 predict_fn = predictor.from_saved_model(export_dir)
 
 
@@ -36,9 +36,10 @@ for exi in tqdm(testf):
     onebatch = np.expand_dims(image, axis=0)
     
     predictions = predict_fn({'image_input':onebatch})
-    label_predict = np.arange(28)[predictions['predictions'][0]>=0.5]
+    label_predict = np.arange(28)[predictions['predictions'][0]>=0.2]
     str_predict_label = ' '.join(str(l) for l in label_predict)
     predicted.append(str_predict_label)
 
 submit['Predicted'] = predicted
-submit.to_csv('mysubmission05.csv', index=False)
+submit.to_csv('mysubmission02.csv', index=False)
+
