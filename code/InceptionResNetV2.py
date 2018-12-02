@@ -8,6 +8,7 @@ from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormalization,Input
 from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
 from tensorflow.python.client import device_lib
+from tensorflow.python.ops import array_ops
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
@@ -29,7 +30,7 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'Y_to_RG'
+exptitle = 'FocalLoss'
 
 
 ###############################################################################
@@ -43,7 +44,7 @@ def get_model_folder():
         os.makedirs(tensorboard_path)
     return tensorboard_path
 
-###############################################################################
+#####################################################my_loss##########################
 # model
 ###############################################################################
 
@@ -78,6 +79,38 @@ def f1(y_true, y_pred):
     f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
     return K.mean(f1)
 
+def focal_loss(target_tensor,prediction_tensor, weights=None, alpha=0.25, gamma=2):
+    r"""Compute focal loss for predictions.
+
+        Multi-labels Focal loss formula:
+            FL = -alpha * (z-p)^gamma * log(p) -(1-alpha) * p^gamma * log(1-p)
+                 ,which alpha = 0.25, gamma = 2, p = sigmoid(x), z = target_tensor.
+
+    Args:
+     prediction_tensor: A float tensor of shape [batch_size, num_anchors,
+        num_classes] representing the predicted logits for each class
+     target_tensor: A float tensor of shape [batch_size, num_anchors,
+        num_classes] representing one-hot encoded classification targets
+     weights: A float tensor of shape [batch_size, num_anchors]
+     alpha: A scalar tensor for focal loss alpha hyper-parameter
+     gamma: A scalar tensor for focal loss gamma hyper-parameter
+    Returns:
+        loss: A (scalar) tensor representing the value of the loss function
+    """
+    sigmoid_p = tf.nn.sigmoid(prediction_tensor)
+    zeros = array_ops.zeros_like(sigmoid_p, dtype=sigmoid_p.dtype)
+    
+    # For poitive prediction, only need consider front part loss, back part is 0;
+    # target_tensor > zeros <=> z=1, so poitive coefficient = z - p.
+    pos_p_sub = array_ops.where(target_tensor > zeros, target_tensor - sigmoid_p, zeros)
+    
+    # For negative prediction, only need consider back part loss, front part is 0;
+    # target_tensor > zeros <=> z=1, so negative coefficient = 0.
+    neg_p_sub = array_ops.where(target_tensor > zeros, zeros, sigmoid_p)
+    per_entry_cross_ent = - alpha * (pos_p_sub ** gamma) * tf.log(tf.clip_by_value(sigmoid_p, 1e-8, 1.0)) \
+                          - (1 - alpha) * (neg_p_sub ** gamma) * tf.log(tf.clip_by_value(1.0 - sigmoid_p, 1e-8, 1.0))
+    return tf.reduce_sum(per_entry_cross_ent)
+
 K.clear_session()
 
 model = create_model(
@@ -87,9 +120,9 @@ model = create_model(
 model.summary()
 
 model.compile(
-    loss='categorical_crossentropy', 
+    loss='binary_crossentropy', 
     optimizer=tf.train.AdamOptimizer(lr),
-    metrics=['acc', f1])
+    metrics=[f1])
 
 ###############################################################################
 # strategy, config and estimator
@@ -144,8 +177,8 @@ def parse_fn(example):
   image = tf.div(tf.cast(image,tf.float32), 255.0)
   
   image = tf.stack([
-          tf.reshape(image[:,:,0],[parsed["height"],parsed["width"]])+tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])/2
-         ,tf.reshape(image[:,:,1],[parsed["height"],parsed["width"]])+tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])/2
+          tf.reshape(image[:,:,0],[parsed["height"],parsed["width"]])
+         ,tf.reshape(image[:,:,1],[parsed["height"],parsed["width"]])
          ,tf.reshape(image[:,:,2],[parsed["height"],parsed["width"]])]
          ,axis=2)
 
