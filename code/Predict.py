@@ -14,7 +14,7 @@ import pandas as pd
 INPUT_SHAPE = (299,299,3)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201812021413_FocalLoss_lre05/export/best_exporter/1543789897'
+export_dir = './model/201812032046_F1loss_lr1e-04_3-7bothTandVal/export/best_exporter/1543900814'
 predict_fn = predictor.from_saved_model(export_dir)
 
 

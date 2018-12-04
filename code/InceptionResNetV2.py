@@ -19,9 +19,9 @@ ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
-VAL_BATCH_SIZE=50
-TRAIN_STEPS = 1000*5
-lr = 1e-04
+VAL_BATCH_SIZE=100
+TRAIN_STEPS = 1000*15
+lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
@@ -30,7 +30,7 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'FocalLoss_lre04'
+exptitle = 'F1loss_lr1e-05_3-7Val_3onlyVal'
 
 
 ###############################################################################
@@ -73,6 +73,7 @@ def create_model(input_shape, n_out):
     return model
 
 def f1(y_true, y_pred):
+    y_pred = K.round(y_pred)
     tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
     fp = K.sum(K.cast((1-y_true)*y_pred, 'float'), axis=0)
     fn = K.sum(K.cast(y_true*(1-y_pred), 'float'), axis=0)
@@ -86,7 +87,7 @@ def f1(y_true, y_pred):
 
 def focal_loss(y_true, y_pred):
 
-    alpha=0.25
+    alpha=0.50
     gamma=2
     
     zeros = array_ops.zeros_like(y_pred, dtype=y_pred.dtype)
@@ -102,6 +103,20 @@ def focal_loss(y_true, y_pred):
                           - (1 - alpha) * (neg_p_sub ** gamma) * tf.log(tf.clip_by_value(1.0 - y_pred, 1e-8, 1.0))
     return tf.reduce_sum(per_entry_cross_ent)
 
+def f1_loss(y_true, y_pred):
+    
+    tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
+    fp = K.sum(K.cast((1-y_true)*y_pred, 'float'), axis=0)
+    fn = K.sum(K.cast(y_true*(1-y_pred), 'float'), axis=0)
+
+    p = tp / (tp + fp + K.epsilon())
+    r = tp / (tp + fn + K.epsilon())
+
+    f1 = 2*p*r / (p+r+K.epsilon())
+    f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
+    
+    return 1-K.mean(f1)
+
 K.clear_session()
 
 model = create_model(
@@ -111,7 +126,7 @@ model = create_model(
 model.summary()
 
 model.compile(
-    loss=focal_loss, 
+    loss=f1_loss, 
     optimizer=tf.train.AdamOptimizer(lr),
     metrics=[f1])
 
@@ -221,7 +236,7 @@ train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FILES
                                                    ,batch_size=VAL_BATCH_SIZE
                                                    ,mode = tf.estimator.ModeKeys.EVAL)
-                                                    ,steps = 100
+                                                    ,steps = 200
                                                     ,start_delay_secs = 0
                                                     ,exporters = exporter)
 
