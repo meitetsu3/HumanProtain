@@ -11,10 +11,11 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 import pandas as pd
-INPUT_SHAPE = (299,299,3)
+#INPUT_SHAPE = (299,299,3)
+INPUT_SHAPE = (224,224,3)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201812032046_F1loss_lr1e-04_3-7bothTandVal/export/best_exporter/1543900814'
+export_dir = './model/201812062233_Resnet50_F1loss_lr1e-05_3Val_3onlyVal_RGBY/export/best_exporter/1544164537'
 predict_fn = predictor.from_saved_model(export_dir)
 
 
@@ -31,8 +32,10 @@ for exi in tqdm(testf):
     image = np.frombuffer(image, dtype=np.uint8)
     image = image.reshape([height,width,channel])
     image = cv2.resize(image,(INPUT_SHAPE[0],INPUT_SHAPE[1]))
-    image = image[:,:,0:3].astype(np.float32)/255.0
-    
+    image = np.stack((image[:,:,0].astype(np.float32)/255.0,
+                     image[:,:,1].astype(np.float32)/255.0,
+                     image[:,:,2].astype(np.float32)/255.0+image[:,:,3].astype(np.float32)/255.0)
+                    ,axis=2)
     onebatch = np.expand_dims(image, axis=0)
     
     predictions = predict_fn({'image_input':onebatch})

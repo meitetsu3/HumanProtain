@@ -7,6 +7,7 @@ from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormalization,Input
 from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
+from tensorflow.python.keras.applications.resnet50 import ResNet50
 from tensorflow.python.client import device_lib
 from tensorflow.python.ops import array_ops
 
@@ -16,11 +17,12 @@ def get_available_gpus():
 
 NUM_GPUS = len(get_available_gpus())
 ORI_IMAGE_SHAPE = (512,512,4)
-INPUT_SHAPE = (299,299,3)
+INPUT_SHAPE = (224,224,3)
+#INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*15
+TRAIN_STEPS = 1000*20
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
@@ -30,7 +32,7 @@ MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'F1loss_lr1e-05_3-7Val_3onlyVal'
+exptitle = 'Resnet50_F1loss_lr1e-05_3Val_3onlyVal_RGBY'
 
 
 ###############################################################################
@@ -50,7 +52,7 @@ def get_model_folder():
 
 def create_model(input_shape, n_out):
 
-    pretrain_model = InceptionResNetV2(
+    pretrain_model = ResNet50(
     include_top=False, 
     weights='imagenet', 
     input_shape=input_shape)    
@@ -163,7 +165,7 @@ estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 def augment(image):
     image = tf.image.random_flip_left_right(image)
     image = tf.image.random_flip_up_down(image)
-    nk = tf.random_uniform([], minval=0, maxval=3, dtype=tf.int32)
+    nk = tf.random_uniform([], minval=0, maxval=4, dtype=tf.int32)
     image = tf.image.rot90(image, k = nk)
     return image
 
@@ -185,7 +187,8 @@ def parse_fn(example):
   image = tf.stack([
           tf.reshape(image[:,:,0],[parsed["height"],parsed["width"]])
          ,tf.reshape(image[:,:,1],[parsed["height"],parsed["width"]])
-         ,tf.reshape(image[:,:,2],[parsed["height"],parsed["width"]])]
+         ,tf.reshape(image[:,:,2],[parsed["height"],parsed["width"]])
+                     +tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])]
          ,axis=2)
 
   image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
@@ -212,7 +215,7 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
 
 
 ###############################################################################
-# train and evaluate
+# train and evaluate201812052119_FF1loss_lr1e-05_3Val_3onlyVal_rotate_contrast
 ###############################################################################
 
 

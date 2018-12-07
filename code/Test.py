@@ -17,7 +17,7 @@ ite = next(trainf)
 def augment(image):
     image = tf.image.random_flip_left_right(image)
     image = tf.image.random_flip_up_down(image)
-    nk = tf.random_uniform([], minval=0, maxval=3, dtype=tf.int32)
+    nk = tf.random_uniform([], minval=0, maxval=4, dtype=tf.int32)
     image = tf.image.rot90(image, k = nk)
     return image
 
@@ -53,8 +53,9 @@ def parse_fn(example):
 image, labels = parse_fn(ite)
 
 with tf.Session() as sess:
-    image_tf = sess.run(image)
+    image_tf = sess.run(tf.contrib.image.rotate(image,tf.random.uniform([1])))
     labels_tf = sess.run(labels)
+    r = sess.run(tf.random.uniform([1]))
     #test = sess.run(parse_fn(ite))
 
 #test.shape
