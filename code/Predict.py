@@ -15,7 +15,7 @@ import pandas as pd
 INPUT_SHAPE = (224,224,3)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201812062233_Resnet50_F1loss_lr1e-05_3Val_3onlyVal_RGBY/export/best_exporter/1544164537'
+export_dir = './model/201812070734_Resnet50_F1loss_lr1e-05_3-7-5Val_RGBY/export/best_exporter/1544200804'
 predict_fn = predictor.from_saved_model(export_dir)
 
 

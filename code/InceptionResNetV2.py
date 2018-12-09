@@ -2,6 +2,8 @@
 import tensorflow as tf
 import pandas as pd
 import os
+import glob
+import random
 from datetime import datetime
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.models import Model
@@ -22,17 +24,18 @@ INPUT_SHAPE = (224,224,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*20
+TRAIN_STEPS = 1000*10
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TEST_FILES = "../input_tf/Test-*.tfrecords"
+TMP_FILES = "../input_tf/temp-*.tfrecords"
 MODEL_DIR = './model'
 TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'Resnet50_F1loss_lr1e-05_3Val_3onlyVal_RGBY'
+exptitle = 'FF1loss_lr1e-05_3Val_3onlyVal_RGBY'
 
 
 ###############################################################################
@@ -148,17 +151,6 @@ config = tf.estimator.RunConfig(train_distribute=strategy
 estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
 ###############################################################################
-# metrics
-###############################################################################
-
-
-#def my_rmse(labels, predictions):
-#    pred_values = predictions['predictions']
-#    return {"rmse": tf.metrics.root_mean_squared_error(labels, pred_values)}
-#
-#estimator = tf.contrib.estimator.add_metrics(estimator, my_rmse)
-
-###############################################################################
 # data input pipeline
 ###############################################################################
 
@@ -229,6 +221,19 @@ def serving_input_fn():
     }
     return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
 
+class evalhook(tf.train.SessionRunHook):
+    def end(self, session):
+        valfiles =  glob.glob(VAL_FILES)
+        trainfiles = random.sample(glob.glob(TRAIN_FILES), 3)
+        for f in valfiles:
+            os.rename(f, f.replace("Val","temp")) 
+        tempfiles = glob.glob(TMP_FILES)
+        for i,f in enumerate(trainfiles):
+            os.rename(f, valfiles[i])
+        for i,f in enumerate(tempfiles):
+            os.rename(f, trainfiles[i])
+
+                    
 exporter = tf.estimator.BestExporter('best_exporter', serving_input_fn, exports_to_keep=5)
 
 train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
@@ -241,6 +246,7 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                    ,mode = tf.estimator.ModeKeys.EVAL)
                                                     ,steps = 200
                                                     ,start_delay_secs = 0
+                                                    ,hooks = [evalhook()]
                                                     ,exporters = exporter)
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
