@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 import pandas as pd
 import numpy as np
@@ -24,21 +23,17 @@ ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (224,224,3)
 #INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
-BATCH_SIZE = 16 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
+BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*5
+TRAIN_STEPS = 1000*40
 lr = 1e-05
 
 TRAIN_FILES = "../input_tf_balanced/Train-*.tfrecords"
 VAL_FILES = "../input_tf_balanced/Val-*.tfrecords"
-TEST_FILES = "../input_tf_balanced/Test-*.tfrecords"
 TMP_FILES = "../input_tf_balanced/temp-*.tfrecords"
 MODEL_DIR = './model'
-path_to_test = '../input/test/'
-path_to_train = '../input/train/'
+exptitle = 'F1Loss_lr1e-05_DynamicQtrFold_RGBY_balancedinput'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'F1Loss_lr1e-05_3Val_3onlyVal_RGBY_balancedinput'
-
 
 ###############################################################################
 #  Util
@@ -93,7 +88,7 @@ def focal_loss(y_true, y_pred):
     gamma=2
     
     zeros = array_ops.zeros_like(y_pred, dtype=y_pred.dtype)
-    
+
     # For poitive prediction, only need consider front part loss, back part is 0;
     # target_tensor > zeros <=> z=1, so poitive coefficient = z - p.
     pos_p_sub = array_ops.where(y_true > zeros, y_true - y_pred, zeros)
