@@ -1,6 +1,8 @@
 
 import tensorflow as tf
 import pandas as pd
+import numpy as np
+import skimage.io
 import os
 import glob
 import random
@@ -22,20 +24,20 @@ ORI_IMAGE_SHAPE = (512,512,4)
 INPUT_SHAPE = (224,224,3)
 #INPUT_SHAPE = (299,299,3)
 CHECK_POINT_STEPS = 1000
-BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
+BATCH_SIZE = 16 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*10
+TRAIN_STEPS = 1000*5
 lr = 1e-05
 
-TRAIN_FILES = "../input_tf/Train-*.tfrecords"
-VAL_FILES = "../input_tf/Val-*.tfrecords"
-TEST_FILES = "../input_tf/Test-*.tfrecords"
-TMP_FILES = "../input_tf/temp-*.tfrecords"
+TRAIN_FILES = "../input_tf_balanced/Train-*.tfrecords"
+VAL_FILES = "../input_tf_balanced/Val-*.tfrecords"
+TEST_FILES = "../input_tf_balanced/Test-*.tfrecords"
+TMP_FILES = "../input_tf_balanced/temp-*.tfrecords"
 MODEL_DIR = './model'
-TFRECORD_NAME = "Train.tfrecords"
 path_to_test = '../input/test/'
+path_to_train = '../input/train/'
 traindata = pd.read_csv('../input/train.csv')
-exptitle = 'FF1loss_lr1e-05_3Val_3onlyVal_RGBY'
+exptitle = 'F1Loss_lr1e-05_3Val_3onlyVal_RGBY_balancedinput'
 
 
 ###############################################################################
@@ -59,11 +61,6 @@ def create_model(input_shape, n_out):
     include_top=False, 
     weights='imagenet', 
     input_shape=input_shape)    
-    
-    #print(len(pretrain_model.layers)) # 780
-    # freeze layers
-    #for layer in pretrain_model.layers[0:400]:
-    	#    layer.trainable = False
     
     input_tensor = Input(shape=input_shape, name = 'image_input')
     bn = BatchNormalization()(input_tensor)
@@ -162,28 +159,37 @@ def augment(image):
     return image
 
 
+def load_image(path):
+    R = skimage.io.imread(path+'_red.png')
+    Y = skimage.io.imread(path+'_yellow.png')
+    G = skimage.io.imread(path+'_green.png')
+    B = skimage.io.imread(path+'_blue.png')
+
+    # use yellow somehow?
+    image = np.stack((R, G, B,Y), -1)
+    #image = np.divide(image, 255) # or standadize?
+    return image
+sess = tf.Session()
+
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
   example_fmt = {
-    "height": tf.io.FixedLenFeature((), tf.int64, -1),
-    "width": tf.io.FixedLenFeature((), tf.int64, -1),
-    "channel": tf.io.FixedLenFeature((), tf.int64, -1),
     "image": tf.io.FixedLenFeature((), tf.string, ""),
     "label": tf.io.FixedLenFeature((), tf.string, ""),
   }
   parsed = tf.parse_single_example(example, example_fmt)
   image = tf.decode_raw(parsed["image"], tf.uint8)
-  image = tf.reshape(image,[parsed["height"],parsed["width"],4])
+  image = tf.reshape(image,[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1],ORI_IMAGE_SHAPE[2]])
   image = tf.div(tf.cast(image,tf.float32), 255.0)
   
   image = tf.stack([
-          tf.reshape(image[:,:,0],[parsed["height"],parsed["width"]])
-         ,tf.reshape(image[:,:,1],[parsed["height"],parsed["width"]])
-         ,tf.reshape(image[:,:,2],[parsed["height"],parsed["width"]])
-                     +tf.reshape(image[:,:,3],[parsed["height"],parsed["width"]])]
+          tf.reshape(image[:,:,0],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
+         ,tf.reshape(image[:,:,1],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
+         ,tf.reshape(image[:,:,2],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
+                     +tf.reshape(image[:,:,3],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])]
          ,axis=2)
 
-  image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
+  #image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
   image = tf.image.resize_images(image, (INPUT_SHAPE[0], INPUT_SHAPE[1]))
   image = augment(image)
 

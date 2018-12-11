@@ -68,3 +68,31 @@ with tf.Session() as sess:
 
 RGB = Image.fromarray((image_tf*255).astype(np.uint8))
 RGB.show()
+
+
+file0.tfrecord: [0, 1]
+file1.tfrecord: [2, 3]
+file2.tfrecord: [4]
+
+with tf.python_io.TFRecordWriter('./file2.tfrecord') as writer:
+    for r in range(4,5):
+        example = tf.train.Example(features=tf.train.Features(feature={
+                "n": tf.train.Feature(int64_list=tf.train.Int64List(value=[r]))}))
+        writer.write(example.SerializeToString())
+    writer.close()
+
+    
+files = ["file{}.tfrecord".format(i) for i in range(3)]
+files = tf.data.Dataset.from_tensor_slices(files)
+dataset = files.interleave(lambda x: tf.data.TFRecordDataset(x),
+                           cycle_length=3, block_length=1)
+
+dataset = dataset.repeat(None)
+
+iterator = dataset.make_one_shot_iterator()
+x = iterator.get_next()
+
+with tf.Session() as sess:
+    for _ in range(12):
+        print(sess.run(x))
+
