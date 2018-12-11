@@ -13,9 +13,10 @@ from tqdm import tqdm
 import pandas as pd
 #INPUT_SHAPE = (299,299,3)
 INPUT_SHAPE = (224,224,3)
+ORI_IMAGE_SHAPE = (512,512,4)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201812092230_F1loss_lr1e-05_DynamicQtrfold_RGBY_50kstep/export/best_exporter/1544435020'
+export_dir = './model/201812110015_F1Loss_lr1e-05_DynamicQtrFold_RGBY_balancedinput/export/best_exporter/1544559190'
 predict_fn = predictor.from_saved_model(export_dir)
 
 
@@ -25,12 +26,12 @@ submit = pd.read_csv('../input/sample_submission.csv')
 predicted = []
 for exi in tqdm(testf):
     ex = tf.train.Example.FromString(exi)
-    height = ex.features.feature["height"].int64_list.value[0]
-    width = ex.features.feature["width"].int64_list.value[0]
-    channel = ex.features.feature["channel"].int64_list.value[0]
+#    height = ex.features.feature["height"].int64_list.value[0]
+#    width = ex.features.feature["width"].int64_list.value[0]
+#    channel = ex.features.feature["channel"].int64_list.value[0]
     image = ex.features.feature["image"].bytes_list.value[0]
     image = np.frombuffer(image, dtype=np.uint8)
-    image = image.reshape([height,width,channel])
+    image = image.reshape([ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1],ORI_IMAGE_SHAPE[2]])
     image = cv2.resize(image,(INPUT_SHAPE[0],INPUT_SHAPE[1]))
     image = np.stack((image[:,:,0].astype(np.float32)/255.0,
                      image[:,:,1].astype(np.float32)/255.0,

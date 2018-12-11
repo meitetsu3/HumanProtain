@@ -9,6 +9,7 @@ import tensorflow as tf
 import random
 import skimage.io
 import os
+import glob
 
 path_to_train = '../input/train/'
 path_to_test = '../input/test/'
@@ -104,8 +105,11 @@ def CreateTensorflowReadFile(img_path_balanced, out_file):
             writer.write(example.SerializeToString())
     writer.close()
     
-bs = 30065 # 360780/12
+bs = 3436 # 360780/105
 
-for b in range(12):
+for b in range(105):
     CreateTensorflowReadFile(img_path_balanced[b*bs:(b+1)*bs] , "../input_tf_balanced/Train-"+str(b)+".tfrecords")
 
+for i in range(0,30):
+    f = "../input_tf_balanced/Train-"+str(i)+".tfrecords"
+    os.rename(f, f.replace("Train","Val")) 

@@ -27,6 +27,8 @@ BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
 TRAIN_STEPS = 1000*40
 lr = 1e-05
+VAL_NO = 30
+FILE_NO = 105-VAL_NO
 
 TRAIN_FILES = "../input_tf_balanced/Train-*.tfrecords"
 VAL_FILES = "../input_tf_balanced/Val-*.tfrecords"
@@ -197,13 +199,13 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
         repeat_count = None
     shuffle_buffer_size = 10*batch_size
     files = tf.data.Dataset.list_files(input_files)
-    dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=os.cpu_count())
+    dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=FILE_NO)
     dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
     dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
     #dataset = dataset.cache()
     dataset = dataset.repeat(repeat_count)
     dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size = None)
+    dataset = dataset.prefetch(buffer_size = BATCH_SIZE)
     return dataset
 
 
@@ -225,7 +227,7 @@ def serving_input_fn():
 class evalhook(tf.train.SessionRunHook):
     def end(self, session):
         valfiles =  glob.glob(VAL_FILES)
-        trainfiles = random.sample(glob.glob(TRAIN_FILES), 3)
+        trainfiles = random.sample(glob.glob(TRAIN_FILES), VAL_NO)
         for f in valfiles:
             os.rename(f, f.replace("Val","temp")) 
         tempfiles = glob.glob(TMP_FILES)

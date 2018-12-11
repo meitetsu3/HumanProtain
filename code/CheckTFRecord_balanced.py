@@ -36,13 +36,12 @@ def load_image(path):
 
 
 def showimg(file_it):
-    nxt = next(trainf)
+    nxt = next(file_it)
     nxtparsed = tf.train.Example.FromString(nxt)
-    imagepath = nxtparsed.features.feature["imagepath"].bytes_list.value[0].decode("utf-8") 
+    image = nxtparsed.features.feature["image"].bytes_list.value[0]
     labels = nxtparsed.features.feature["label"].bytes_list.value[0]
-    
-    path = os.path.join(path_to_train, imagepath)
-    image = load_image(path)
+
+    image = np.frombuffer(image, dtype=np.uint8)
     image = image.reshape([ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1],ORI_IMAGE_SHAPE[2]])
 
     labels = np.frombuffer(labels, dtype=np.uint8)
@@ -50,8 +49,6 @@ def showimg(file_it):
     print(image[:,:,0:3].shape)
     RGB = Image.fromarray(image[:,:,0:3])
     RGB.show()
-    #RGY = Image.fromarray(image[:,:,[0,1,3]])
-    #RGY.show()
 
 showimg(trainf)
 
