@@ -96,3 +96,8 @@ with tf.Session() as sess:
     for _ in range(12):
         print(sess.run(x))
 
+x = tf.constant([0.9, 2.55, 2.3, 1.5, -4.5])
+rnd =tf.round(x)
+
+with tf.Session() as sess:
+    print(sess.run(x[0]))

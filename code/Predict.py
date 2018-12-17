@@ -16,7 +16,7 @@ INPUT_SHAPE = (224,224,3)
 ORI_IMAGE_SHAPE = (512,512,4)
 TEST_FILE = "../input_tf/Test-.tfrecords"
 
-export_dir = './model/201812110015_F1Loss_lr1e-05_DynamicQtrFold_RGBY_balancedinput/export/best_exporter/1544559190'
+export_dir = './model/201812120644_F1Loss_lr1e-05_345QtrHoldOut_RGBY/export/best_exporter/1544627576'
 predict_fn = predictor.from_saved_model(export_dir)
 
 
