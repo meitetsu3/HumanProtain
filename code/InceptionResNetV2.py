@@ -14,6 +14,10 @@ from tensorflow.python.keras.applications.resnet50 import ResNet50
 from tensorflow.python.client import device_lib
 from tensorflow.python.ops import array_ops
 
+# having this string i.e. len() > 0 will restore the best model and predict
+# ottherwise, it will create new training and save the model.
+restore_dir = './model/201812170741_F1Loss_lr1e-05_678QtrHoldOut_RGBY'
+
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']
@@ -29,26 +33,33 @@ TRAIN_STEPS = 1000*15
 lr = 1e-05
 VAL_NO = 3
 FILE_NO = 12-VAL_NO
+if len(restore_dir) > 0:
+    FILE_NO = 1
 
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
+TEST_FILE = "../input_tf/Test-.tfrecords"
 MODEL_DIR = './model'
 exptitle = 'F1Loss_lr1e-05_345QtrHoldOut_RGBY'
 traindata = pd.read_csv('../input/train.csv')
+
 
 ###############################################################################
 #  Util
 ###############################################################################
 
 def get_model_folder():
-    folder_name = "/{0}_{1}".format(datetime.now().strftime("%Y%m%d%H%M"),exptitle)
-    tensorboard_path = MODEL_DIR + folder_name
-    if not os.path.exists(tensorboard_path):
-        os.makedirs(tensorboard_path)
+    if len(restore_dir)>0:
+        tensorboard_path = restore_dir
+    else:
+        folder_name = "/{0}_{1}".format(datetime.now().strftime("%Y%m%d%H%M"),exptitle)
+        tensorboard_path = MODEL_DIR + folder_name
+        if not os.path.exists(tensorboard_path):
+            os.makedirs(tensorboard_path)
     return tensorboard_path
 
-#####################################################my_loss##########################
+###############################################################################
 # model
 ###############################################################################
 
@@ -70,7 +81,7 @@ def create_model(input_shape, n_out):
     output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
     model = Model(input_tensor, output)
     return model
-
+restore_dir
 def f1(y_true, y_pred):
     y_pred = K.round(y_pred)
     tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
@@ -83,7 +94,7 @@ def f1(y_true, y_pred):
     f1 = 2*p*r / (p+r+K.epsilon())
     f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
     return K.mean(f1)
-
+restore_dir
 def f1_0(y_true, y_pred):
     return f1(y_true[:,0],y_pred[:,0])
 def f1_1(y_true, y_pred):
@@ -152,7 +163,7 @@ def focal_loss(y_true, y_pred):
     # target_tensor > zeros <=> z=1, so poitive coefficient = z - p.
     pos_p_sub = array_ops.where(y_true > zeros, y_true - y_pred, zeros)
     
-    # For negative prediction, only need consider back part loss, front part is 0;
+    # For negative prediction, only need conrestore_dirsider back part loss, front part is 0;
     # target_tensor > zeros <=> z=1, so negative coefficient = 0.
     neg_p_sub = array_ops.where(y_true > zeros, zeros, y_pred)
     per_entry_cross_ent = - alpha * (pos_p_sub ** gamma) * tf.log(tf.clip_by_value(y_pred, 1e-8, 1.0)) \
@@ -257,7 +268,8 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
     shuffle_buffer_size = 10*batch_size
     files = tf.data.Dataset.list_files(input_files)
     dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=FILE_NO)
-    dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+    if mode != tf.estimator.ModeKeys.PREDICT:
+        dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
     dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
     #dataset = dataset.cache()
     dataset = dataset.repeat(repeat_count)
@@ -267,7 +279,7 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
 
 
 ###############################################################################
-# train and evaluate201812052119_FF1loss_lr1e-05_3Val_3onlyVal_rotate_contrast
+# train and evaluate, or predict
 ###############################################################################
 
 
@@ -309,5 +321,18 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                     #,hooks = [evalhook()]
                                                     ,exporters = exporter)
 
-tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-
+if len(restore_dir)==0:
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+else:
+    predictions = estimator.predict(input_fn=lambda:input_fn(input_files = TEST_FILE
+                                                       ,batch_size=VAL_BATCH_SIZE
+                                                       ,mode = tf.estimator.ModeKeys.PREDICT)
+                                      )
+    submit = pd.read_csv('../input/sample_submission.csv')
+    predicted = []
+    for pred in predictions:
+        label_predict = np.arange(28)[pred['predictions']>=0.5]
+        str_predict_label = ' '.join(str(l) for l in label_predict)
+        predicted.append(str_predict_label)
+    submit['Predicted'] = predicted
+    submit.to_csv('mysubmission05.csv', index=False)

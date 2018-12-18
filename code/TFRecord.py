@@ -81,7 +81,7 @@ for b in range(12):
     CreateTensorflowReadFile(train_dataset_info[b*bs:(b+1)*bs] , "../input_tf/Train-"+str(b)+".tfrecords")
 # change the name to Val if you want to use it for validation
     
-#CreateTensorflowReadFile(test_dataset_info , "../input_tf/Test-.tfrecords")
+CreateTensorflowReadFile(test_dataset_info , "../input_tf/Test-.tfrecords")
 
 
 # original about 18GB
