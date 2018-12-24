@@ -12,6 +12,7 @@ import grpc
 from tensorflow_serving.apis import predict_pb2
 from tensorflow_serving.apis import prediction_service_pb2_grpc
 from tensorflow.core.framework import types_pb2
+from tqdm import tqdm
 
 VAL_BATCH_SIZE=100
 VAL_NO = 3
@@ -41,7 +42,7 @@ request.model_spec.signature_name = 'serving_default'
 request.inputs['image_input'].dtype = types_pb2.DT_STRING
 
 predicted = []
-for i in testf:
+for i in tqdm(testf):
     request.inputs['image_input'].CopyFrom(tf.contrib.util.make_tensor_proto(i,shape=[1]))
     result = stub.Predict(request, 5.0)
     label_predict = np.arange(28)[np.array(result.outputs['predictions'].float_val)>=0.5]
