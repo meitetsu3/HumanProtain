@@ -16,7 +16,8 @@ from tensorflow.python.ops import array_ops
 
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
-restore_dir = './model/201812170741_F1Loss_lr1e-05_678QtrHoldOut_RGBY'
+restore_dir = './model/201812222145_F1Loss_lr1e-05_678QtrHoldOut_RGBY/export/best_exporter/1545542524'
+#restore_dir = ''
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
@@ -29,7 +30,7 @@ INPUT_SHAPE = (224,224,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*15
+TRAIN_STEPS = 1000*5
 lr = 1e-05
 VAL_NO = 3
 FILE_NO = 12-VAL_NO
@@ -41,7 +42,7 @@ VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
 TEST_FILE = "../input_tf/Test-.tfrecords"
 MODEL_DIR = './model'
-exptitle = 'F1Loss_lr1e-05_345QtrHoldOut_RGBY'
+exptitle = 'F1Loss_lr1e-05_678QtrHoldOut_RGBY'
 traindata = pd.read_csv('../input/train.csv')
 
 
@@ -81,7 +82,7 @@ def create_model(input_shape, n_out):
     output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
     model = Model(input_tensor, output)
     return model
-restore_dir
+
 def f1(y_true, y_pred):
     y_pred = K.round(y_pred)
     tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
@@ -94,7 +95,7 @@ def f1(y_true, y_pred):
     f1 = 2*p*r / (p+r+K.epsilon())
     f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
     return K.mean(f1)
-restore_dir
+
 def f1_0(y_true, y_pred):
     return f1(y_true[:,0],y_pred[:,0])
 def f1_1(y_true, y_pred):
@@ -225,42 +226,37 @@ def augment(image):
     image = tf.image.rot90(image, k = nk)
     return image
 
-def load_image(path):
-    R = skimage.io.imread(path+'_red.png')
-    Y = skimage.io.imread(path+'_yellow.png')
-    G = skimage.io.imread(path+'_green.png')
-    B = skimage.io.imread(path+'_blue.png')
+example_fmt = {
+        "image": tf.io.FixedLenFeature((), tf.string, ""),
+        "label": tf.io.FixedLenFeature((), tf.string, ""),
+    }
 
-    # use yellow somehow?
-    image = np.stack((R, G, B,Y), -1)
-    #image = np.divide(image, 255) # or standadize?
-    return image
-
-def parse_fn(example):
-  "Parse TFExample records and perform simple data augmentation."
-  example_fmt = {
-    "image": tf.io.FixedLenFeature((), tf.string, ""),
-    "label": tf.io.FixedLenFeature((), tf.string, ""),
-  }
-  parsed = tf.parse_single_example(example, example_fmt)
+def extract_image(parsed, augment_flag=False):
+  "extract features from parsed example (dict)"
   image = tf.decode_raw(parsed["image"], tf.uint8)
   image = tf.reshape(image,[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1],ORI_IMAGE_SHAPE[2]])
   image = tf.div(tf.cast(image,tf.float32), 255.0)
-  
   image = tf.stack([
           tf.reshape(image[:,:,0],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
          ,tf.reshape(image[:,:,1],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
          ,tf.reshape(image[:,:,2],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])
                      +tf.reshape(image[:,:,3],[ORI_IMAGE_SHAPE[0],ORI_IMAGE_SHAPE[1]])]
          ,axis=2)
-
-  #image = tf.slice(image,[0,0,0],[parsed["height"],parsed["width"],3])
   image = tf.image.resize_images(image, (INPUT_SHAPE[0], INPUT_SHAPE[1]))
-  image = augment(image)
+  if augment_flag:
+      image = augment(image)
+  return image
 
+def extract_label(parsed):
+  "extract features from parsed example (dict)"
   labels = tf.decode_raw(parsed["label"], tf.uint8)
   labels = tf.cast(labels, tf.float32)
-  return image, labels
+  return labels
+
+def parse_fn(example,augment_flag):
+  "Parse TFExample records and perform simple data augmentation."
+  parsed = tf.parse_single_example(example, example_fmt)
+  return extract_image(parsed, augment_flag=augment_flag), extract_label(parsed)
 
 def input_fn(input_files,mode,batch_size=16,repeat_count=1):
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -270,28 +266,28 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
     dataset = files.interleave(tf.data.TFRecordDataset, cycle_length=FILE_NO)
     if mode != tf.estimator.ModeKeys.PREDICT:
         dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
-    dataset = dataset.map(map_func=parse_fn, num_parallel_calls=os.cpu_count())
+        augment_flag = True
+    else:
+        augment_flag = False
+    dataset = dataset.map(map_func=lambda example:parse_fn(example,augment_flag=augment_flag)
+        , num_parallel_calls=os.cpu_count())
     #dataset = dataset.cache()
     dataset = dataset.repeat(repeat_count)
     dataset = dataset.batch(batch_size=batch_size)
     dataset = dataset.prefetch(buffer_size = None)
     return dataset
 
+def serving_input_fn():
+    input_ph = tf.placeholder(tf.string, [1])
+    feature_placeholders = {'image_input': input_ph}
+    features = tf.parse_example(input_ph,example_fmt)
+    features=tf.map_fn(extract_image, features,dtype=tf.float32)
+    features = {"image_input":features}
+    return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
 
 ###############################################################################
 # train and evaluate, or predict
 ###############################################################################
-
-
-def serving_input_fn():
-    feature_placeholders = {
-        'image_input': tf.placeholder(tf.float64, [None,INPUT_SHAPE[0],INPUT_SHAPE[1],INPUT_SHAPE[2]]),
-    }
-    features = {
-        key: tensor
-        for key, tensor in feature_placeholders.items()
-    }
-    return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
 
 class evalhook(tf.train.SessionRunHook):
     def end(self, session):
@@ -305,7 +301,6 @@ class evalhook(tf.train.SessionRunHook):
         for i,f in enumerate(tempfiles):
             os.rename(f, trainfiles[i])
 
-                    
 exporter = tf.estimator.BestExporter('best_exporter', serving_input_fn, exports_to_keep=5)
 
 train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
@@ -318,7 +313,7 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                    ,mode = tf.estimator.ModeKeys.EVAL)
                                                     ,steps = 200
                                                     ,start_delay_secs = 0
-                                                    #,hooks = [evalhook()]
+                                                    #,hooks = [evalhook()]PREDICT
                                                     ,exporters = exporter)
 
 if len(restore_dir)==0:
@@ -335,4 +330,4 @@ else:
         str_predict_label = ' '.join(str(l) for l in label_predict)
         predicted.append(str_predict_label)
     submit['Predicted'] = predicted
-    submit.to_csv('mysubmission05.csv', index=False)
+    submit.to_csv('mysubmission2.csv', index=False)
