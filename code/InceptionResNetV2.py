@@ -1,7 +1,5 @@
 import tensorflow as tf
 import pandas as pd
-import numpy as np
-import skimage.io
 import os
 import glob
 import random
@@ -12,12 +10,13 @@ from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormaliz
 from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
 from tensorflow.python.keras.applications.resnet50 import ResNet50
 from tensorflow.python.client import device_lib
-from tensorflow.python.ops import array_ops
+
+tf.reset_default_graph()
 
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
-restore_dir = './model/201812222145_F1Loss_lr1e-05_678QtrHoldOut_RGBY/export/best_exporter/1545542524'
-#restore_dir = ''
+restore_dir = './model/201812252059_F1Loss_lr1e-05_678QtrHoldOut_RGBY_2layers_freezeto-26'
+restore_dir = ''
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
@@ -30,7 +29,7 @@ INPUT_SHAPE = (224,224,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*5
+TRAIN_STEPS = 1000*3
 lr = 1e-05
 VAL_NO = 3
 FILE_NO = 12-VAL_NO
@@ -41,47 +40,30 @@ TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
 TEST_FILE = "../input_tf/Test-.tfrecords"
-MODEL_DIR = './model'
-exptitle = 'F1Loss_lr1e-05_678QtrHoldOut_RGBY'
+MODEL_DIR_BASE = './model'
+exptitle = 'F1Loss_lr1e-05_678QtrHoldOut_RGBY_2layers_freezeto-26'
 traindata = pd.read_csv('../input/train.csv')
-
-
-###############################################################################
-#  Util
-###############################################################################
 
 def get_model_folder():
     if len(restore_dir)>0:
         tensorboard_path = restore_dir
     else:
         folder_name = "/{0}_{1}".format(datetime.now().strftime("%Y%m%d%H%M"),exptitle)
-        tensorboard_path = MODEL_DIR + folder_name
+        tensorboard_path = MODEL_DIR_BASE + folder_name
         if not os.path.exists(tensorboard_path):
             os.makedirs(tensorboard_path)
     return tensorboard_path
+
+MODEL_DIR = get_model_folder()
 
 ###############################################################################
 # model
 ###############################################################################
 
-def create_model(input_shape, n_out):
+#image_input = tf.feature_column.numeric_column("image_input",shape = INPUT_SHAPE)
+#labels = tf.feature_column.numeric_column("labels",shape = [28])
+#feature_columns = [image_input, labels]
 
-    pretrain_model = ResNet50(
-    include_top=False, 
-    weights='imagenet', 
-    input_shape=input_shape)    
-    
-    input_tensor = Input(shape=input_shape, name = 'image_input')
-    bn = BatchNormalization()(input_tensor)
-    x = pretrain_model(bn)
-    #bn = BatchNormalization()(x)
-    x = Flatten()(x)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
-    model = Model(input_tensor, output)
-    return model
 
 def f1(y_true, y_pred):
     y_pred = K.round(y_pred)
@@ -153,24 +135,6 @@ def f1_26(y_true, y_pred):
 def f1_27(y_true, y_pred):
     return f1(y_true[:,27],y_pred[:,27])
 
-def focal_loss(y_true, y_pred):
-
-    alpha=0.50
-    gamma=2
-    
-    zeros = array_ops.zeros_like(y_pred, dtype=y_pred.dtype)
-
-    # For poitive prediction, only need consider front part loss, back part is 0;
-    # target_tensor > zeros <=> z=1, so poitive coefficient = z - p.
-    pos_p_sub = array_ops.where(y_true > zeros, y_true - y_pred, zeros)
-    
-    # For negative prediction, only need conrestore_dirsider back part loss, front part is 0;
-    # target_tensor > zeros <=> z=1, so negative coefficient = 0.
-    neg_p_sub = array_ops.where(y_true > zeros, zeros, y_pred)
-    per_entry_cross_ent = - alpha * (pos_p_sub ** gamma) * tf.log(tf.clip_by_value(y_pred, 1e-8, 1.0)) \
-                          - (1 - alpha) * (neg_p_sub ** gamma) * tf.log(tf.clip_by_value(1.0 - y_pred, 1e-8, 1.0))
-    return tf.reduce_sum(per_entry_cross_ent)
-
 def f1_loss(y_true, y_pred):
     
     tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
@@ -185,25 +149,62 @@ def f1_loss(y_true, y_pred):
     
     return 1-K.mean(f1)
 
-K.clear_session()
+def create_model(input_shape, n_out):
 
-model = create_model(
-    input_shape=INPUT_SHAPE,
-    n_out=28)
+    pretrain_model = ResNet50(
+    include_top=False, 
+    weights='imagenet', 
+    input_shape=input_shape)    
     
-model.summary()
+    input_tensor = Input(shape=input_shape, name = 'image_input')
+    bn = BatchNormalization()(input_tensor)
+    x = pretrain_model(bn)
+    #bn = BatchNormalization()(x)
+    x = Flatten()(x)
+    x = Dropout(0.5)(x)
+    x = Dense(1024, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
+    model = Model(input_tensor, output)
+    return model
 
-model.compile(
-    loss=f1_loss, 
-    optimizer=tf.train.AdamOptimizer(lr),
-    metrics=[f1,f1_0,f1_1,f1_2,f1_3,f1_4,f1_5,f1_6,f1_7,f1_8,f1_9,f1_10,f1_11,f1_12
-             ,f1_13,f1_14,f1_15,f1_16,f1_17,f1_18,f1_19,f1_20,f1_21,f1_22,f1_23,f1_24,f1_25
-             ,f1_26,f1_27])
+def model_fn(features, labels, mode, params):
+    
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        features = features['feature']
+    x = Flatten()(features)
+    x = Dropout(0.5)(x)
+    x = Dense(1024, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    output = Dense(28, activation='sigmoid',name = 'predictions')(x)
+
+    # Return if it is in prediction mode
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {'predictions': output}
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+
+    ### Compute loss.
+    loss = f1_loss(y_true=labels, y_pred=output)
+
+    # Return if in evaluation mode
+    if mode == tf.estimator.ModeKeys.EVAL:
+        return tf.estimator.EstimatorSpec(
+            mode, loss=loss)
+
+    ### Create optimizer and trainer
+    assert mode == tf.estimator.ModeKeys.TRAIN
+
+    # Create the optimizer
+    optimizer = tf.train.AdagradOptimizer(learning_rate=lr)
+    train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+    
+    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 ###############################################################################
 # strategy, config and estimator
 ###############################################################################
 
+   
 if NUM_GPUS == 1:
     strategy = tf.contrib.distribute.OneDeviceStrategy('/gpu:0')
 elif NUM_GPUS > 1:
@@ -211,9 +212,11 @@ elif NUM_GPUS > 1:
 
 config = tf.estimator.RunConfig(train_distribute=strategy
                                 ,save_checkpoints_steps = CHECK_POINT_STEPS
-                                , model_dir=get_model_folder())
+                                , model_dir=MODEL_DIR)
 
-estimator = tf.keras.estimator.model_to_estimator(model,config=config)
+estimator = tf.estimator.Estimator(model_fn=model_fn
+                                   ,config = config)
+#estimator = tf.keras.estimator.model_to_estimator(model,config=config)
 
 ###############################################################################
 # data input pipeline
@@ -227,8 +230,8 @@ def augment(image):
     return image
 
 example_fmt = {
-        "image": tf.io.FixedLenFeature((), tf.string, ""),
-        "label": tf.io.FixedLenFeature((), tf.string, ""),
+        "image": tf.FixedLenFeature((), tf.string, ""),
+        "label": tf.FixedLenFeature((), tf.string, ""),
     }
 
 def extract_image(parsed, augment_flag=False):
@@ -279,11 +282,9 @@ def input_fn(input_files,mode,batch_size=16,repeat_count=1):
 
 def serving_input_fn():
     input_ph = tf.placeholder(tf.string, [1])
-    feature_placeholders = {'image_input': input_ph}
     features = tf.parse_example(input_ph,example_fmt)
     features=tf.map_fn(extract_image, features,dtype=tf.float32)
-    features = {"image_input":features}
-    return tf.estimator.export.ServingInputReceiver(features, feature_placeholders)
+    return tf.estimator.export.ServingInputReceiver(features, input_ph)
 
 ###############################################################################
 # train and evaluate, or predict
@@ -301,6 +302,7 @@ class evalhook(tf.train.SessionRunHook):
         for i,f in enumerate(tempfiles):
             os.rename(f, trainfiles[i])
 
+            
 exporter = tf.estimator.BestExporter('best_exporter', serving_input_fn, exports_to_keep=5)
 
 train_spec = tf.estimator.TrainSpec(input_fn=lambda:input_fn(input_files = TRAIN_FILES
@@ -313,21 +315,7 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                    ,mode = tf.estimator.ModeKeys.EVAL)
                                                     ,steps = 200
                                                     ,start_delay_secs = 0
-                                                    #,hooks = [evalhook()]PREDICT
+                                                    #,hooks = [evalhook()]
                                                     ,exporters = exporter)
 
-if len(restore_dir)==0:
-    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-else:
-    predictions = estimator.predict(input_fn=lambda:input_fn(input_files = TEST_FILE
-                                                       ,batch_size=VAL_BATCH_SIZE
-                                                       ,mode = tf.estimator.ModeKeys.PREDICT)
-                                      )
-    submit = pd.read_csv('../input/sample_submission.csv')
-    predicted = []
-    for pred in predictions:
-        label_predict = np.arange(28)[pred['predictions']>=0.5]
-        str_predict_label = ' '.join(str(l) for l in label_predict)
-        predicted.append(str_predict_label)
-    submit['Predicted'] = predicted
-    submit.to_csv('mysubmission2.csv', index=False)
+tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
