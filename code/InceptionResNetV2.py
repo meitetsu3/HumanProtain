@@ -10,9 +10,11 @@ from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormaliz
 from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
 from tensorflow.python.keras.applications.resnet50 import ResNet50
 from tensorflow.python.client import device_lib
+from tensorflow.contrib import slim
+from tensorflow.contrib.slim.nets import resnet_v2
 
 tf.reset_default_graph()
-
+resnet50ckpt = './resnet_v2_50_2017_04_14/resnet_v2_50.ckpt'
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
 restore_dir = './model/201812252059_F1Loss_lr1e-05_678QtrHoldOut_RGBY_2layers_freezeto-26'
@@ -29,7 +31,7 @@ INPUT_SHAPE = (224,224,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*3
+TRAIN_STEPS = 1000*20
 lr = 1e-05
 VAL_NO = 3
 FILE_NO = 12-VAL_NO
@@ -57,7 +59,7 @@ def get_model_folder():
 MODEL_DIR = get_model_folder()
 
 ###############################################################################
-# model
+# modelmodel.load_weights('all_layers_freezed.h5')
 ###############################################################################
 
 #image_input = tf.feature_column.numeric_column("image_input",shape = INPUT_SHAPE)
@@ -150,12 +152,11 @@ def f1_loss(y_true, y_pred):
     return 1-K.mean(f1)
 
 def create_model(input_shape, n_out):
-
     pretrain_model = ResNet50(
     include_top=False, 
     weights='imagenet', 
     input_shape=input_shape)    
-    
+      
     input_tensor = Input(shape=input_shape, name = 'image_input')
     bn = BatchNormalization()(input_tensor)
     x = pretrain_model(bn)
@@ -168,15 +169,26 @@ def create_model(input_shape, n_out):
     model = Model(input_tensor, output)
     return model
 
+
 def model_fn(features, labels, mode, params):
     
     if mode == tf.estimator.ModeKeys.PREDICT:
         features = features['feature']
-    x = Flatten()(features)
+    
+    logits, end_points = resnet_v2.resnet_v2_50(features, is_training=True)
+        
+    all_resnet50vars = tf.all_variables()
+
+    x = Flatten()(logits)
     x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
     x = Dropout(0.5)(x)
+    
     output = Dense(28, activation='sigmoid',name = 'predictions')(x)
+   
+    tf.contrib.framework.assign_from_checkpoint_fn(resnet50ckpt
+                                                   ,var_list=all_resnet50vars
+                                                   ,ignore_missing_vars=True)
 
     # Return if it is in prediction mode
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -197,6 +209,7 @@ def model_fn(features, labels, mode, params):
     # Create the optimizer
     optimizer = tf.train.AdagradOptimizer(learning_rate=lr)
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+    
     
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
