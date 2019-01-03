@@ -1,50 +1,44 @@
 import tensorflow as tf
-import pandas as pd
 import os
 import glob
 import random
 from datetime import datetime
 from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormalization,Input
-from tensorflow.python.keras.applications.inception_resnet_v2 import InceptionResNetV2
-from tensorflow.python.keras.applications.resnet50 import ResNet50
 from tensorflow.python.client import device_lib
 from tensorflow.contrib import slim
 from tensorflow.contrib.slim.nets import resnet_v2
 
 tf.reset_default_graph()
+
+exptitle = 'CELoss_lr1e-02_678QtrHoldOut_50k'
+TRAIN_FILES = "../input_tf/Train-*.tfrecords"
+VAL_FILES = "../input_tf/Val-*.tfrecords"
+TMP_FILES = "../input_tf/temp-*.tfrecords"
+TEST_FILE = "../input_tf/Test-.tfrecords"
+MODEL_DIR_BASE = './model'
 resnet50ckpt = './resnet_v2_50_2017_04_14/resnet_v2_50.ckpt'
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
-restore_dir = './model/201812252059_F1Loss_lr1e-05_678QtrHoldOut_RGBY_2layers_freezeto-26'
 restore_dir = ''
+if len(restore_dir) > 0:
+    FILE_NO = 1
+
+ORI_IMAGE_SHAPE = (512,512,4)
+INPUT_SHAPE = (224,224,3)
+CHECK_POINT_STEPS = 1000
+BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
+VAL_BATCH_SIZE=100
+TRAIN_STEPS = 1000*50
+lr = 1e-02
+VAL_NO = 3
+FILE_NO = 12-VAL_NO
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']
 
 NUM_GPUS = len(get_available_gpus())
-ORI_IMAGE_SHAPE = (512,512,4)
-INPUT_SHAPE = (224,224,3)
-#INPUT_SHAPE = (299,299,3)
-CHECK_POINT_STEPS = 1000
-BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
-VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*20
-lr = 1e-05
-VAL_NO = 3
-FILE_NO = 12-VAL_NO
-if len(restore_dir) > 0:
-    FILE_NO = 1
-
-TRAIN_FILES = "../input_tf/Train-*.tfrecords"
-VAL_FILES = "../input_tf/Val-*.tfrecords"
-TMP_FILES = "../input_tf/temp-*.tfrecords"
-TEST_FILE = "../input_tf/Test-.tfrecords"
-MODEL_DIR_BASE = './model'
-exptitle = 'F1Loss_lr1e-05_678QtrHoldOut_RGBY_2layers_freezeto-26'
-traindata = pd.read_csv('../input/train.csv')
 
 def get_model_folder():
     if len(restore_dir)>0:
@@ -59,12 +53,8 @@ def get_model_folder():
 MODEL_DIR = get_model_folder()
 
 ###############################################################################
-# modelmodel.load_weights('all_layers_freezed.h5')
+# model
 ###############################################################################
-
-#image_input = tf.feature_column.numeric_column("image_input",shape = INPUT_SHAPE)
-#labels = tf.feature_column.numeric_column("labels",shape = [28])
-#feature_columns = [image_input, labels]
 
 
 def f1(y_true, y_pred):
@@ -78,64 +68,64 @@ def f1(y_true, y_pred):
 
     f1 = 2*p*r / (p+r+K.epsilon())
     f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
-    return K.mean(f1)
+    return f1
 
 def f1_0(y_true, y_pred):
-    return f1(y_true[:,0],y_pred[:,0])
+    return tf.metrics.mean(f1(y_true[:,0],y_pred[:,0]))
 def f1_1(y_true, y_pred):
-    return f1(y_true[:,1],y_pred[:,1])
+    return tf.metrics.mean(f1(y_true[:,1],y_pred[:,1]))
 def f1_2(y_true, y_pred):
-    return f1(y_true[:,2],y_pred[:,2])
+    return tf.metrics.mean(f1(y_true[:,2],y_pred[:,2]))
 def f1_3(y_true, y_pred):
-    return f1(y_true[:,3],y_pred[:,3])
+    return tf.metrics.mean(f1(y_true[:,3],y_pred[:,3]))
 def f1_4(y_true, y_pred):
-    return f1(y_true[:,4],y_pred[:,4])
+    return tf.metrics.mean(f1(y_true[:,4],y_pred[:,4]))
 def f1_5(y_true, y_pred):
-    return f1(y_true[:,5],y_pred[:,5])
+    return tf.metrics.mean(f1(y_true[:,5],y_pred[:,5]))
 def f1_6(y_true, y_pred):
-    return f1(y_true[:,6],y_pred[:,6])
+    return tf.metrics.mean(f1(y_true[:,6],y_pred[:,6]))
 def f1_7(y_true, y_pred):
-    return f1(y_true[:,7],y_pred[:,7])
+    return tf.metrics.mean(f1(y_true[:,7],y_pred[:,7]))
 def f1_8(y_true, y_pred):
-    return f1(y_true[:,8],y_pred[:,8])
+    return tf.metrics.mean(f1(y_true[:,8],y_pred[:,8]))
 def f1_9(y_true, y_pred):
-    return f1(y_true[:,9],y_pred[:,9])
+    return tf.metrics.mean(f1(y_true[:,9],y_pred[:,9]))
 def f1_10(y_true, y_pred):
-    return f1(y_true[:,10],y_pred[:,10])
+    return tf.metrics.mean(f1(y_true[:,10],y_pred[:,10]))
 def f1_11(y_true, y_pred):
-    return f1(y_true[:,11],y_pred[:,11])
+    return tf.metrics.mean(f1(y_true[:,11],y_pred[:,11]))
 def f1_12(y_true, y_pred):
-    return f1(y_true[:,12],y_pred[:,12])
+    return tf.metrics.mean(f1(y_true[:,12],y_pred[:,12]))
 def f1_13(y_true, y_pred):
-    return f1(y_true[:,13],y_pred[:,13])
+    return tf.metrics.mean(f1(y_true[:,13],y_pred[:,13]))
 def f1_14(y_true, y_pred):
-    return f1(y_true[:,14],y_pred[:,14])
+    return tf.metrics.mean(f1(y_true[:,14],y_pred[:,14]))
 def f1_15(y_true, y_pred):
-    return f1(y_true[:,15],y_pred[:,15])
+    return tf.metrics.mean(f1(y_true[:,15],y_pred[:,15]))
 def f1_16(y_true, y_pred):
-    return f1(y_true[:,16],y_pred[:,16])
+    return tf.metrics.mean(f1(y_true[:,16],y_pred[:,16]))
 def f1_17(y_true, y_pred):
-    return f1(y_true[:,17],y_pred[:,17])
+    return tf.metrics.mean(f1(y_true[:,17],y_pred[:,17]))
 def f1_18(y_true, y_pred):
-    return f1(y_true[:,18],y_pred[:,18])
+    return tf.metrics.mean(f1(y_true[:,18],y_pred[:,18]))
 def f1_19(y_true, y_pred):
-    return f1(y_true[:,19],y_pred[:,19])
+    return tf.metrics.mean(f1(y_true[:,19],y_pred[:,19]))
 def f1_20(y_true, y_pred):
-    return f1(y_true[:,20],y_pred[:,20])
+    return tf.metrics.mean(f1(y_true[:,20],y_pred[:,20]))
 def f1_21(y_true, y_pred):
-    return f1(y_true[:,21],y_pred[:,21])
+    return tf.metrics.mean(f1(y_true[:,21],y_pred[:,21]))
 def f1_22(y_true, y_pred):
-    return f1(y_true[:,22],y_pred[:,22])
+    return tf.metrics.mean(f1(y_true[:,22],y_pred[:,22]))
 def f1_23(y_true, y_pred):
-    return f1(y_true[:,23],y_pred[:,23])
+    return tf.metrics.mean(f1(y_true[:,23],y_pred[:,23]))
 def f1_24(y_true, y_pred):
-    return f1(y_true[:,24],y_pred[:,24])
+    return tf.metrics.mean(f1(y_true[:,24],y_pred[:,24]))
 def f1_25(y_true, y_pred):
-    return f1(y_true[:,25],y_pred[:,25])
+    return tf.metrics.mean(f1(y_true[:,25],y_pred[:,25]))
 def f1_26(y_true, y_pred):
-    return f1(y_true[:,26],y_pred[:,26])
+    return tf.metrics.mean(f1(y_true[:,26],y_pred[:,26]))
 def f1_27(y_true, y_pred):
-    return f1(y_true[:,27],y_pred[:,27])
+    return tf.metrics.mean(f1(y_true[:,27],y_pred[:,27]))
 
 def f1_loss(y_true, y_pred):
     
@@ -151,67 +141,92 @@ def f1_loss(y_true, y_pred):
     
     return 1-K.mean(f1)
 
-def create_model(input_shape, n_out):
-    pretrain_model = ResNet50(
-    include_top=False, 
-    weights='imagenet', 
-    input_shape=input_shape)    
-      
-    input_tensor = Input(shape=input_shape, name = 'image_input')
-    bn = BatchNormalization()(input_tensor)
-    x = pretrain_model(bn)
-    #bn = BatchNormalization()(x)
-    x = Flatten()(x)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    output = Dense(n_out, activation='sigmoid',name = 'predictions')(x)
-    model = Model(input_tensor, output)
-    return model
+class RestoreHook(tf.train.SessionRunHook):
+    def __init__(self, init_fn):
+        self.init_fn = init_fn
 
+    def after_create_session(self, session, coord=None):
+        if session.run(tf.train.get_or_create_global_step()) == 0:
+            self.init_fn(session)
+#            print("--------------------")
+#            print(self.init_fn)
+#            print('ckpt restored!')
 
 def model_fn(features, labels, mode, params):
     
     if mode == tf.estimator.ModeKeys.PREDICT:
         features = features['feature']
-    
-    logits, end_points = resnet_v2.resnet_v2_50(features, is_training=True)
+#
+    arg_scope=resnet_v2.resnet_arg_scope()
+    with slim.arg_scope(arg_scope):
+        logits, end_points = resnet_v2.resnet_v2_50(features
+                ,is_training=True)
         
-    all_resnet50vars = tf.all_variables()
-
-    x = Flatten()(logits)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
+#    all_resnet50vars = []
+#    for var in slim.get_model_variables():
+#        all_resnet50vars.append(var)
+    #variables_to_restore = slim.get_variables_to_restore()
+    variables_to_restore = []    
+    for var in tf.trainable_variables():    
+        variables_to_restore.append(var)
+        
+    init_fn=tf.contrib.framework.assign_from_checkpoint_fn(resnet50ckpt
+                                                   ,var_list=variables_to_restore
+                                                   ,ignore_missing_vars=False)
     
+    x = Flatten()(logits)
+#    x = Dropout(0.5)(x)
+#    x = Dense(1024, activation='relu')(x)
+#    x = Dropout(0.5)(x)
+#    
     output = Dense(28, activation='sigmoid',name = 'predictions')(x)
    
-    tf.contrib.framework.assign_from_checkpoint_fn(resnet50ckpt
-                                                   ,var_list=all_resnet50vars
-                                                   ,ignore_missing_vars=True)
-
-    # Return if it is in prediction mode
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {'predictions': output}
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
     ### Compute loss.
-    loss = f1_loss(y_true=labels, y_pred=output)
+    #loss = f1_loss(y_true=labels, y_pred=output)
+    slim.losses.softmax_cross_entropy(output, labels)
+    total_loss = slim.losses.get_total_loss()
 
-    # Return if in evaluation mode
     if mode == tf.estimator.ModeKeys.EVAL:
         return tf.estimator.EstimatorSpec(
-            mode, loss=loss)
+            mode, loss=total_loss,eval_metric_ops={'f1':(tf.metrics.mean(f1(labels,output)))
+                                                    ,'f1_0':(f1_0(labels,output))
+                                                    ,'f1_1':(f1_1(labels,output))
+                                                    ,'f1_2':(f1_2(labels,output))
+                                                    ,'f1_3':(f1_3(labels,output))
+                                                    ,'f1_4':(f1_4(labels,output))
+                                                    ,'f1_5':(f1_5(labels,output))
+                                                    ,'f1_6':(f1_6(labels,output))
+                                                    ,'f1_7':(f1_7(labels,output))
+                                                    ,'f1_8':(f1_8(labels,output))
+                                                    ,'f1_9':(f1_9(labels,output))
+                                                    ,'f1_10':(f1_10(labels,output))
+                                                    ,'f1_11':(f1_11(labels,output))
+                                                    ,'f1_12':(f1_12(labels,output))
+                                                    ,'f1_13':(f1_13(labels,output))
+                                                    ,'f1_14':(f1_14(labels,output))
+                                                    ,'f1_15':(f1_15(labels,output))
+                                                    ,'f1_16':(f1_16(labels,output))
+                                                    ,'f1_17':(f1_17(labels,output))
+                                                    ,'f1_18':(f1_18(labels,output))
+                                                    ,'f1_19':(f1_19(labels,output))
+                                                    ,'f1_20':(f1_20(labels,output))
+                                                    ,'f1_21':(f1_21(labels,output))
+                                                    ,'f1_22':(f1_22(labels,output))
+                                                    ,'f1_23':(f1_23(labels,output))
+                                                    ,'f1_24':(f1_24(labels,output))
+                                                    ,'f1_25':(f1_25(labels,output))
+                                                    ,'f1_26':(f1_26(labels,output))
+                                                    ,'f1_27':(f1_27(labels,output))})
 
-    ### Create optimizer and trainer
-    assert mode == tf.estimator.ModeKeys.TRAIN
-
-    # Create the optimizer
-    optimizer = tf.train.AdagradOptimizer(learning_rate=lr)
-    train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-    
-    
-    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        optimizer = tf.train.AdagradOptimizer(learning_rate=lr)
+        train_op = optimizer.minimize(total_loss, global_step=tf.train.get_global_step())
+        return tf.estimator.EstimatorSpec(mode, loss=total_loss, train_op=train_op
+                                          ,training_hooks=[RestoreHook(init_fn)])
 
 ###############################################################################
 # strategy, config and estimator
@@ -223,13 +238,15 @@ if NUM_GPUS == 1:
 elif NUM_GPUS > 1:
     strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 
-config = tf.estimator.RunConfig(train_distribute=strategy
-                                ,save_checkpoints_steps = CHECK_POINT_STEPS
+config = tf.estimator.RunConfig(save_checkpoints_steps = CHECK_POINT_STEPS
                                 , model_dir=MODEL_DIR)
 
+#ws = tf.estimator.WarmStartSettings(ckpt_to_initialize_from = resnet50ckpt
+#                       ,vars_to_warm_start=".*resnet_v2_50.*")
+
 estimator = tf.estimator.Estimator(model_fn=model_fn
-                                   ,config = config)
-#estimator = tf.keras.estimator.model_to_estimator(model,config=config)
+                                   ,config = config
+                                   )
 
 ###############################################################################
 # data input pipeline
