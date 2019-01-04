@@ -11,7 +11,7 @@ from tensorflow.contrib.slim.nets import resnet_v2
 
 tf.reset_default_graph()
 
-exptitle = 'CELoss_lr1e-02_678QtrHoldOut_50k'
+exptitle = 'f1Loss_lr1e-02_678QtrHoldOut_50k'
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
@@ -186,9 +186,9 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
     ### Compute loss.
-    #loss = f1_loss(y_true=labels, y_pred=output)
-    slim.losses.softmax_cross_entropy(output, labels)
-    total_loss = slim.losses.get_total_loss()
+    total_loss = f1_loss(y_true=labels, y_pred=output)
+    #slim.losses.softmax_cross_entropy(output, labels)
+    #total_loss = slim.losses.get_total_loss()
 
     if mode == tf.estimator.ModeKeys.EVAL:
         return tf.estimator.EstimatorSpec(
