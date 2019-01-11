@@ -1,6 +1,7 @@
 
+#docker pull tensorflow/serving
 #docker run -p 8500:8500 \
-#--mount type=bind,source=/media/user1/MyHDataStor1/kaggle/HumanProtain/code/model/201812222145_F1Loss_lr1e-05_678QtrHoldOut_RGBY/export/best_exporter,target=/models/HumanProtein \
+#--mount type=bind,source=/media/user1/MyHDataStor1/kaggle/HumanProtain/code/model/201901030733_f1Loss_lr1e-02_678QtrHoldOut_50k/export/best_exporter,target=/models/HumanProtein \
 #-e MODEL_NAME=HumanProtein -t tensorflow/serving &
 
 import tensorflow as tf
@@ -25,13 +26,13 @@ channel = grpc.insecure_channel('localhost:8500')
 stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
 request = predict_pb2.PredictRequest()
 request.model_spec.name = 'HumanProtein'
-request.model_spec.version.value = 1545716481
+request.model_spec.version.value = 1546778953
 request.model_spec.signature_name = 'serving_default'
-request.inputs['image_input'].dtype = types_pb2.DT_STRING
+request.inputs['input'].dtype = types_pb2.DT_STRING
 
 predicted = []
 for i in tqdm(testf):
-    request.inputs['image_input'].CopyFrom(tf.contrib.util.make_tensor_proto(i,shape=[1]))
+    request.inputs['input'].CopyFrom(tf.contrib.util.make_tensor_proto(i,shape=[1]))
     result = stub.Predict(request, 5.0)
     result_ar = np.array(result.outputs['predictions'].float_val)
     result_ar = result_ar+max(0,min(0.5-result_ar))

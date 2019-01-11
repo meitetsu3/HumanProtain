@@ -4,14 +4,15 @@ import glob
 import random
 from datetime import datetime
 from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.layers import Dropout, Flatten, Dense,BatchNormalization,Input
 from tensorflow.python.client import device_lib
 from tensorflow.contrib import slim
 from tensorflow.contrib.slim.nets import resnet_v2
+import numpy as np
+import pandas as pd
 
 tf.reset_default_graph()
 
-exptitle = 'f1Loss_lr1e-02_678QtrHoldOut_50k'
+exptitle = 'f1Loss_lr1e-01_678QtrHoldOut_70k'
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
@@ -20,7 +21,9 @@ MODEL_DIR_BASE = './model'
 resnet50ckpt = './resnet_v2_50_2017_04_14/resnet_v2_50.ckpt'
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
-restore_dir = ''
+restore_dir = './model/201901092332_f1Loss_lr1e-01_678QtrHoldOut_70k'
+#restore_dir = ''
+
 if len(restore_dir) > 0:
     FILE_NO = 1
 
@@ -29,8 +32,8 @@ INPUT_SHAPE = (224,224,3)
 CHECK_POINT_STEPS = 1000
 BATCH_SIZE = 32 # 16 for gtx 1070 laptop, 32 or more for gtx 1080 ti
 VAL_BATCH_SIZE=100
-TRAIN_STEPS = 1000*50
-lr = 1e-02
+TRAIN_STEPS = 1000*70
+lr = 1e-01
 VAL_NO = 3
 FILE_NO = 12-VAL_NO
 
@@ -146,49 +149,43 @@ class RestoreHook(tf.train.SessionRunHook):
         self.init_fn = init_fn
 
     def after_create_session(self, session, coord=None):
-        if session.run(tf.train.get_or_create_global_step()) == 0:
+        if session.run(tf.train.get_or_create_global_step())>0:
             self.init_fn(session)
+            arg_scope=resnet_v2.resnet_arg_scope()
+            with slim.arg_scope(arg_scope):
+                gs_init = global_step.assign(0)
+                session.run(gs_init)
 #            print("--------------------")
 #            print(self.init_fn)
 #            print('ckpt restored!')
 
 def model_fn(features, labels, mode, params):
     
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        features = features['feature']
-#
+    is_training = False
+    features = features['feature']
+    if mode != tf.estimator.ModeKeys.PREDICT:
+        is_training = True
+        labels = labels['labels']
+        
     arg_scope=resnet_v2.resnet_arg_scope()
     with slim.arg_scope(arg_scope):
-        logits, end_points = resnet_v2.resnet_v2_50(features
-                ,is_training=True)
-        
-#    all_resnet50vars = []
-#    for var in slim.get_model_variables():
-#        all_resnet50vars.append(var)
-    #variables_to_restore = slim.get_variables_to_restore()
-    variables_to_restore = []    
-    for var in tf.trainable_variables():    
-        variables_to_restore.append(var)
-        
+        logits, end_points = resnet_v2.resnet_v2_50(features,is_training=is_training)
+    variables_to_restore=[]    
+    for var in slim.get_variables_to_restore():
+        variables_to_restore.append(var)   
     init_fn=tf.contrib.framework.assign_from_checkpoint_fn(resnet50ckpt
-                                                   ,var_list=variables_to_restore
-                                                   ,ignore_missing_vars=False)
+                                                       ,var_list=variables_to_restore
+                                                       ,ignore_missing_vars=False)
     
-    x = Flatten()(logits)
-#    x = Dropout(0.5)(x)
-#    x = Dense(1024, activation='relu')(x)
-#    x = Dropout(0.5)(x)
-#    
-    output = Dense(28, activation='sigmoid',name = 'predictions')(x)
-   
+    output = tf.layers.dense(tf.layers.flatten(logits),28, activation='sigmoid'
+                             ,name = 'predictions')
+    
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {'predictions': output}
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
     ### Compute loss.
     total_loss = f1_loss(y_true=labels, y_pred=output)
-    #slim.losses.softmax_cross_entropy(output, labels)
-    #total_loss = slim.losses.get_total_loss()
 
     if mode == tf.estimator.ModeKeys.EVAL:
         return tf.estimator.EstimatorSpec(
@@ -289,7 +286,7 @@ def extract_label(parsed):
 def parse_fn(example,augment_flag):
   "Parse TFExample records and perform simple data augmentation."
   parsed = tf.parse_single_example(example, example_fmt)
-  return extract_image(parsed, augment_flag=augment_flag), extract_label(parsed)
+  return {'feature':extract_image(parsed, augment_flag=augment_flag)}, {'labels':extract_label(parsed)}
 
 def input_fn(input_files,mode,batch_size=16,repeat_count=1):
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -346,6 +343,24 @@ eval_spec = tf.estimator.EvalSpec(input_fn=lambda:input_fn(input_files = VAL_FIL
                                                     ,steps = 200
                                                     ,start_delay_secs = 0
                                                     #,hooks = [evalhook()]
-                                                    ,exporters = exporter)
+                                                    ,exporters = exporter
+                                                    )
 
-tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+
+if len(restore_dir)==0:
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+else:
+    print('---------')
+    predictions = estimator.predict(input_fn=lambda:input_fn(input_files = TEST_FILE
+                                                       ,batch_size=VAL_BATCH_SIZE
+                                                       ,mode = tf.estimator.ModeKeys.PREDICT)
+                                      )
+    submit = pd.read_csv('../input/sample_submission.csv')
+    predicted = []
+    for pred in predictions:
+        label_predict = np.arange(28)[pred['predictions']>=0.5]
+        str_predict_label = ' '.join(str(l) for l in label_predict)
+        predicted.append(str_predict_label)
+    submit['Predicted'] = predicted
+    submit.to_csv('mysubmission05.csv', index=False)
