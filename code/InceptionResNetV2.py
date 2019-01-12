@@ -12,7 +12,7 @@ import pandas as pd
 
 tf.reset_default_graph()
 
-exptitle = 'f1Loss_lr1e-01_678QtrHoldOut_70k'
+exptitle = 'f1Loss_lr1e-01_678QtrHoldOut_70k_istrainingF'
 TRAIN_FILES = "../input_tf/Train-*.tfrecords"
 VAL_FILES = "../input_tf/Val-*.tfrecords"
 TMP_FILES = "../input_tf/temp-*.tfrecords"
@@ -21,7 +21,7 @@ MODEL_DIR_BASE = './model'
 resnet50ckpt = './resnet_v2_50_2017_04_14/resnet_v2_50.ckpt'
 # having this string i.e. len() > 0 will restore the best model and predict
 # ottherwise, it will create new training and save the model.
-restore_dir = './model/201901092332_f1Loss_lr1e-01_678QtrHoldOut_70k'
+restore_dir = './model/201901111904_f1Loss_lr1e-01_678QtrHoldOut_70k_istrainingF'
 #restore_dir = ''
 
 if len(restore_dir) > 0:
@@ -161,15 +161,13 @@ class RestoreHook(tf.train.SessionRunHook):
 
 def model_fn(features, labels, mode, params):
     
-    is_training = False
     features = features['feature']
     if mode != tf.estimator.ModeKeys.PREDICT:
-        is_training = True
         labels = labels['labels']
-        
+
     arg_scope=resnet_v2.resnet_arg_scope()
     with slim.arg_scope(arg_scope):
-        logits, end_points = resnet_v2.resnet_v2_50(features,is_training=is_training)
+        logits, end_points = resnet_v2.resnet_v2_50(features)
     variables_to_restore=[]    
     for var in slim.get_variables_to_restore():
         variables_to_restore.append(var)   

@@ -26,7 +26,7 @@ channel = grpc.insecure_channel('localhost:8500')
 stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
 request = predict_pb2.PredictRequest()
 request.model_spec.name = 'HumanProtein'
-request.model_spec.version.value = 1546778953
+request.model_spec.version.value = 1547269964
 request.model_spec.signature_name = 'serving_default'
 request.inputs['input'].dtype = types_pb2.DT_STRING
 
